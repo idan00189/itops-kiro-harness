@@ -44,17 +44,40 @@ export function redactValue(value: unknown, depth = 0): unknown {
   return value;
 }
 
+function boundedPreview(serialized: string, byteBudget: number): Record<string, string> {
+  const notice =
+    "Result exceeded ITOPS_MAX_RESULT_BYTES and was truncated before reaching the model.";
+  let lower = 0;
+  let upper = serialized.length;
+  let preview = "";
+  while (lower <= upper) {
+    const middle = Math.floor((lower + upper) / 2);
+    let candidate = serialized.slice(0, middle);
+    if (/[\uD800-\uDBFF]$/.test(candidate)) candidate = candidate.slice(0, -1);
+    if (
+      Buffer.byteLength(JSON.stringify({ notice, preview: candidate }), "utf8") <=
+      byteBudget
+    ) {
+      preview = candidate;
+      lower = middle + 1;
+    } else {
+      upper = middle - 1;
+    }
+  }
+  return { notice, preview };
+}
+
 export function boundedJson(value: unknown): { data: unknown; truncated: boolean; bytes: number } {
   const redacted = redactValue(value);
   const maxBytes = envInteger("ITOPS_MAX_RESULT_BYTES", 1_000_000, 10_000, 10_000_000);
   const serialized = JSON.stringify(redacted);
   const bytes = Buffer.byteLength(serialized, "utf8");
-  if (bytes <= maxBytes) return { data: redacted, truncated: false, bytes };
+  // Leave room for the MCP envelope and metadata so the actual text response,
+  // not merely the inner value, remains under the configured byte limit.
+  const dataBudget = maxBytes - 1_024;
+  if (bytes <= dataBudget) return { data: redacted, truncated: false, bytes };
   return {
-    data: {
-      notice: "Result exceeded ITOPS_MAX_RESULT_BYTES and was truncated before reaching the model.",
-      preview: serialized.slice(0, maxBytes),
-    },
+    data: boundedPreview(serialized, dataBudget),
     truncated: true,
     bytes,
   };

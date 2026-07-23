@@ -26,6 +26,9 @@ describe("SQL read-only guard", () => {
     "EXEC dbo.usp_ReadSomething",
     "SELECT * FROM OtherDb.dbo.Events",
     "SELECT * FROM OPENROWSET('provider', 'secret', 'query')",
+    "SELECT NEXT VALUE FOR dbo.IncidentSequence",
+    "SELECT * FROM dbo.Events WITH (UPDLOCK)",
+    "SELECT * FROM dbo.Events WITH (XLOCK)",
   ])("blocks mutating, procedural, multi-statement, or cross-database SQL: %s", (query) => {
     expect(() => assertReadOnlySql(query)).toThrow();
   });
@@ -46,8 +49,17 @@ describe("Splunk and Dynatrace guards", () => {
   it.each([
     "index=mobile | outputlookup production.csv",
     "index=mobile | collect index=summary",
+    "index=mobile | mcollect index=metrics",
+    "index=mobile | meventcollect index=metrics",
+    "index=mobile | tscollect namespace=mobile",
     "index=mobile | sendemail to=outside@example.com",
+    "index=mobile | sendalert webhook",
     "index=mobile | delete",
+    "| savedsearch hidden_search",
+    "| loadjob savedsearch=\"admin:search:hidden_search\"",
+    "| rest /services/server/info",
+    "| dbxquery connection=prod query=\"select * from secrets\"",
+    "index=mobile `hidden_macro`",
   ])("blocks mutating or exfiltration-oriented SPL: %s", (query) => {
     expect(() => assertReadOnlySpl(query)).toThrow();
   });

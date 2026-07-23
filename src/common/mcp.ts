@@ -20,7 +20,7 @@ export const localWriteAnnotations = {
 
 export function createServer(name: string, instructions: string): McpServer {
   return new McpServer(
-    { name, version: "1.5.0" },
+    { name, version: "1.5.1" },
     {
       instructions,
       capabilities: { logging: {} },
@@ -35,7 +35,7 @@ export function ok(value: unknown): CallToolResult {
       ? (bounded.data as Record<string, unknown>)
       : { data: bounded.data };
   return {
-    content: [{ type: "text", text: JSON.stringify(structured, null, 2) }],
+    content: [{ type: "text", text: JSON.stringify(structured) }],
     structuredContent: {
       ...structured,
       _meta: { truncated: bounded.truncated, originalBytes: bounded.bytes },
