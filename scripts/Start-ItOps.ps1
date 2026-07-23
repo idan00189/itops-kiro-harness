@@ -21,5 +21,8 @@ if (-not (Test-Path -LiteralPath "dist\mcp\core.js")) {
 & node "dist\cli\validate-config.js" "--runtime"
 if ($LASTEXITCODE -ne 0) { throw "Runtime configuration validation failed." }
 
+& (Join-Path $PSScriptRoot "Initialize-ItOpsAuth.ps1") -EnvFile $EnvFile
+if ($LASTEXITCODE -ne 0) { throw "Interactive authentication initialization failed." }
+
 & kiro-cli chat --v3 --agent itops-orchestrator --require-mcp-startup
 exit $LASTEXITCODE

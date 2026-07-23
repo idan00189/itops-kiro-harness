@@ -55,6 +55,21 @@ export function envCsv(name: string, defaultValue = ""): string[] {
     .filter(Boolean);
 }
 
+export function envChoice<const T extends readonly string[]>(
+  name: string,
+  choices: T,
+  defaultValue: T[number],
+): T[number] {
+  const value = env(name, {
+    defaultValue,
+    allowPlaceholder: true,
+  }).toLowerCase();
+  if (!choices.includes(value)) {
+    throw new ConfigError(`${name} must be one of: ${choices.join(", ")}`);
+  }
+  return value;
+}
+
 export function requireSafeBaseUrl(name: string): URL {
   const value = env(name, { required: true });
   let parsed: URL;
@@ -67,7 +82,21 @@ export function requireSafeBaseUrl(name: string): URL {
   if (parsed.protocol !== "https:" && !(local && parsed.protocol === "http:")) {
     throw new ConfigError(`${name} must use HTTPS (HTTP is allowed only for localhost)`);
   }
+  if (parsed.username || parsed.password) {
+    throw new ConfigError(`${name} must not embed credentials`);
+  }
+  if (parsed.search || parsed.hash) {
+    throw new ConfigError(`${name} must not include a query string or fragment`);
+  }
   parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+  return parsed;
+}
+
+export function requireLoopbackUrl(name: string): URL {
+  const parsed = requireSafeBaseUrl(name);
+  if (!["localhost", "127.0.0.1", "::1"].includes(parsed.hostname)) {
+    throw new ConfigError(`${name} must use a loopback host`);
+  }
   return parsed;
 }
 

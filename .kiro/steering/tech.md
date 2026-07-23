@@ -2,14 +2,14 @@
 
 - Kiro CLI v3 unified agent harness
 - seven Markdown custom agent profiles
-- seven local TypeScript MCP servers over stdio
+- six local TypeScript MCP servers over stdio plus the official remote Dynatrace MCP
 - Node.js 20.19 or newer
 - stable Model Context Protocol TypeScript SDK v1
-- Splunk REST API and Simple XML 1.1 generation
-- SQL Server via the Tedious-backed `mssql` driver with read-only intent
+- Splunk REST API through Windows Kerberos/SPNEGO or token authentication, plus Simple XML 1.1 generation
+- SQL Server through Windows integrated ODBC or SQL authentication with read-only intent and fail-closed secondary proof
 - MongoDB/DocumentDB via the official MongoDB Node.js driver
-- Dynatrace Environment API v2 and Grail DQL Query API
-- Argo CD REST API
+- official Dynatrace remote MCP with Kiro-managed confidential OAuth
+- Argo CD REST API with CLI Microsoft/Entra SSO or token authentication
 - Jira and Confluence REST APIs
 - Bitbucket Cloud and GitLab REST APIs
 - PowerShell entry points for Windows

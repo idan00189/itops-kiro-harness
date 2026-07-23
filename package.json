@@ -1,11 +1,11 @@
 {
   "name": "itops-kiro-harness",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "description": "Read-only, multi-agent ITOps investigation harness for Kiro CLI v3",
   "engines": {
-    "node": "^22.12.0 || >=24.0.0"
+    "node": "^22.12.0 || ^24.0.0"
   },
   "scripts": {
     "clean": "node scripts/clean.mjs",
@@ -22,6 +22,12 @@
     "mssql": "12.7.0",
     "yaml": "2.9.0",
     "zod": "4.4.3"
+  },
+  "optionalDependencies": {
+    "msnodesqlv8": "5.2.3"
+  },
+  "overrides": {
+    "@hono/node-server": "2.0.11"
   },
   "devDependencies": {
     "@types/mssql": "12.3.0",

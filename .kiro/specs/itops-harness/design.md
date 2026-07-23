@@ -10,7 +10,7 @@ flowchart TD
     O --> S2["itops-dynatrace"]
     O --> S3["itops-argocd"]
     S1 --> M1["Splunk MCP"]
-    S2 --> M2["Dynatrace MCP"]
+    S2 --> M2["Official remote Dynatrace MCP\nKiro OAuth"]
     S3 --> M3["Argo CD MCP"]
     O --> S4["itops-sql-server"]
     O --> S5["itops-mongodb-docdb"]
@@ -21,7 +21,7 @@ flowchart TD
     C --> R["Hebrew MD / optional RTL HTML"]
 ```
 
-Each agent embeds one stdio MCP server. This prevents workspace-global MCP inheritance from giving a specialist unrelated tools.
+Each agent declares exactly one isolated MCP server. Six are local stdio processes; Dynatrace is the official remote HTTP MCP with Kiro-managed OAuth. Workspace-global MCP inheritance remains disabled, so a specialist cannot receive unrelated tools.
 
 The launcher pins the orchestrator as the user-facing agent. Kiro subagent `availableAgents` and `trustedAgents` contain exactly the six specialist profiles, which report summaries back to the orchestrator.
 
@@ -31,13 +31,14 @@ The private `wiki/` tree is an auto-updated `best` knowledge-base resource on th
 
 ## Control layers
 
-1. Vendor identity: read-only scopes/RBAC/roles.
+1. Vendor identity: read-only scopes/RBAC/roles; current Windows identity for Kerberos/integrated SQL; Microsoft/Entra federation only through supported SSO/OAuth flows.
 2. MCP surface: only read tools; report/XML writes are local and path constrained, and report writing is prompt-gated.
-3. Input guards: SQL/SPL/Mongo allowlists, DQL source allowlist, Argo project/app allowlists, source repository/project allowlists, safe refs, and secret-path denials.
-4. Runtime bounds: timeouts, rows/documents/bytes, pool limits, TLS verification.
-5. Kiro policy: tool tags, exact MCP permission matches, denied shell/fs_write/web.
-6. Hook policy: v3 `PreToolUse` blocking and metadata-only `PostToolUse` audit.
-7. Knowledge policy: indexed selective retrieval, provenance IDs, prompt-injection handling, and no incident-time wiki writes.
+3. Connection proof: SQL requests read intent and verifies the exact database is a read-only AG secondary before the pool and inside each batch.
+4. Input guards: SQL/SPL/Mongo allowlists, remote Dynatrace read scopes, Argo project/app allowlists, source repository/project allowlists, safe refs, and secret-path denials.
+5. Runtime bounds: timeouts, rows/documents/bytes, pool limits, TLS verification.
+6. Kiro policy: tool tags, isolated MCP permission rules, denied shell/fs_write/web.
+7. Hook policy: v3 `PreToolUse` blocking and metadata-only `PostToolUse` audit.
+8. Knowledge policy: indexed selective retrieval, provenance IDs, prompt-injection handling, and no incident-time wiki writes.
 
 ## Data handling
 

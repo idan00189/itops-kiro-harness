@@ -1,21 +1,86 @@
 import { z } from "zod";
 import { assertSafeIdentifier, matchesAllowlist } from "../common/guards.js";
-import { enabled, env, envCsv, requireSafeBaseUrl } from "../common/env.js";
+import {
+  enabled,
+  env,
+  envBoolean,
+  envChoice,
+  envCsv,
+  envInteger,
+  requireSafeBaseUrl,
+} from "../common/env.js";
 import { bearer, fetchJson, withQuery } from "../common/http.js";
 import { createServer, readOnlyAnnotations, runTool, startServer } from "../common/mcp.js";
+import { configuredExecutable, executeBoundedProcess } from "../common/process.js";
 
 const SERVER = "itops-argocd";
 const server = createServer(
   SERVER,
-  "Read-only Argo CD application health, sync, drift, resource-tree, managed-resource, and event inspection. Sync, refresh, rollback, action, delete, and exec tools do not exist.",
+  "Read-only Argo CD application health, sync, drift, resource-tree, managed-resource, and event inspection. Authentication can use a token or a Microsoft Entra-backed Argo CD CLI SSO session. Sync, refresh, rollback, action, delete, and exec tools do not exist.",
 );
+
+type CliTokenCache = { token: string; expiresAt: number };
+let cliTokenCache: CliTokenCache | undefined;
 
 function assertEnabled(): void {
   if (!enabled("ARGOCD")) throw new Error("Argo CD integration is disabled");
 }
 
-function headers(): Record<string, string> {
-  return bearer(env("ARGOCD_TOKEN", { required: true }));
+function authMode(): "cli-sso" | "token" {
+  return envChoice("ARGOCD_AUTH_MODE", ["cli-sso", "token"] as const, "cli-sso");
+}
+
+function jwtExpiration(token: string): number | undefined {
+  const payload = token.split(".")[1];
+  if (!payload) return undefined;
+  try {
+    const decoded = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8"),
+    ) as { exp?: unknown };
+    return typeof decoded.exp === "number" ? decoded.exp * 1_000 : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function cliSessionToken(): Promise<string> {
+  if (cliTokenCache && cliTokenCache.expiresAt > Date.now() + 60_000) {
+    return cliTokenCache.token;
+  }
+  const command = configuredExecutable("ARGOCD_CLI_PATH", "argocd.exe", [
+    "argocd",
+    "argocd.exe",
+  ]);
+  const args = ["account", "session-token"];
+  const context = env("ARGOCD_CLI_CONTEXT", { required: true });
+  args.push("--argocd-context", context);
+  const config = env("ARGOCD_CLI_CONFIG");
+  if (config) args.push("--config", config);
+  if (envBoolean("ARGOCD_CLI_GRPC_WEB", false)) args.push("--grpc-web");
+  const grpcWebRootPath = env("ARGOCD_CLI_GRPC_WEB_ROOT_PATH");
+  if (grpcWebRootPath) args.push("--grpc-web-root-path", grpcWebRootPath);
+  const { stdout } = await executeBoundedProcess(command, args, {
+    timeoutMs: envInteger("ARGOCD_CLI_TIMEOUT_MS", 30_000, 1_000, 120_000),
+    maxBuffer: 64_000,
+  });
+  const token = stdout.trim();
+  if (!token || /\s/.test(token) || token.length > 16_384) {
+    throw new Error(
+      "Argo CD CLI did not return a valid SSO session token; run scripts\\Initialize-ItOpsAuth.ps1",
+    );
+  }
+  cliTokenCache = {
+    token,
+    expiresAt: jwtExpiration(token) ?? Date.now() + 60_000,
+  };
+  return token;
+}
+
+async function headers(): Promise<Record<string, string>> {
+  if (authMode() === "token") {
+    return bearer(env("ARGOCD_TOKEN", { required: true }));
+  }
+  return bearer(await cliSessionToken());
 }
 
 function assertProject(project: string | undefined): string | undefined {
@@ -81,7 +146,7 @@ server.registerTool(
           projects: project,
           selector: input.selector,
         }),
-        { headers: headers() },
+        { headers: await headers() },
       )) as {
         items?: Array<{ metadata?: { name?: string }; spec?: { project?: string } }>;
         [key: string]: unknown;
@@ -109,7 +174,7 @@ server.registerTool(
         withQuery(`/api/v1/applications/${encodeURIComponent(assertApplication(input.application))}`, {
           project: assertProject(input.project),
         }),
-        { headers: headers() },
+        { headers: await headers() },
       );
     }),
 );
@@ -134,7 +199,7 @@ server.registerTool(
           `/api/v1/applications/${encodeURIComponent(assertApplication(input.application))}/resource-tree`,
           { project: assertProject(input.project) },
         ),
-        { headers: headers() },
+        { headers: await headers() },
       );
     }),
 );
@@ -159,7 +224,7 @@ server.registerTool(
           `/api/v1/applications/${encodeURIComponent(assertApplication(input.application))}/managed-resources`,
           { project: assertProject(input.project) },
         ),
-        { headers: headers() },
+        { headers: await headers() },
       );
     }),
 );
@@ -192,7 +257,7 @@ server.registerTool(
             resourceUID: input.resourceUid,
           },
         ),
-        { headers: headers() },
+        { headers: await headers() },
       );
     }),
 );
@@ -214,12 +279,13 @@ server.registerTool(
         projectPatterns.length === 1 && !projectPatterns[0]?.includes("*")
           ? projectPatterns[0]
           : undefined;
+      const authorization = await headers();
       const [version, applicationsResponse] = await Promise.all([
-        fetchJson(base, "/api/version", { headers: headers() }),
+        fetchJson(base, "/api/version", { headers: authorization }),
         fetchJson(
           base,
           withQuery("/api/v1/applications", { projects: exactProject }),
-          { headers: headers() },
+          { headers: authorization },
         ),
       ]);
       const applications = filterApplications(
@@ -228,7 +294,7 @@ server.registerTool(
           [key: string]: unknown;
         },
       );
-      return { status: "ok", version, applications };
+      return { status: "ok", authentication: authMode(), version, applications };
     }),
 );
 

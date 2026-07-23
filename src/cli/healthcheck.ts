@@ -35,12 +35,6 @@ const checks: Check[] = [
     tool: "mongodb_health",
   },
   {
-    integration: "Dynatrace",
-    enabledName: "DYNATRACE",
-    serverPath: "dist/mcp/dynatrace.js",
-    tool: "dynatrace_health",
-  },
-  {
     integration: "Argo CD",
     enabledName: "ARGOCD",
     serverPath: "dist/mcp/argocd.js",
@@ -55,13 +49,18 @@ const checks: Check[] = [
 ];
 
 let failures = 0;
+if (enabled("DYNATRACE")) {
+  console.log(
+    "DEFER Dynatrace: Kiro validates the remote MCP and browser OAuth when the Dynatrace subagent starts",
+  );
+}
 for (const check of checks) {
   if (!enabled(check.enabledName)) {
     console.log(`SKIP ${check.integration}: disabled`);
     continue;
   }
   const client = new Client(
-    { name: "itops-healthcheck", version: "1.1.0" },
+    { name: "itops-healthcheck", version: "1.2.0" },
     { capabilities: {} },
   );
   const transport = new StdioClientTransport({

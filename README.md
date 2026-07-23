@@ -10,21 +10,24 @@ The orchestrator normally answers questions directly in Kiro chat. It writes a d
 |---|---|---|
 | `itops-orchestrator` | `itops-core` | Jira search/read, Confluence search/read, local report/XML artifact writes |
 | `itops-splunk` | `itops-splunk` | bounded log search, visible-index list, offline Simple XML generation |
-| `itops-sql-server` | `itops-sql-server` | parameterized SELECT/CTE on a read-intent connection |
+| `itops-sql-server` | `itops-sql-server` | parameterized SELECT/CTE after exact-database readable-secondary proof |
 | `itops-mongodb-docdb` | `itops-mongodb-docdb` | bounded find, read-only aggregation, schema sample |
-| `itops-dynatrace` | `itops-dynatrace` | problems, entities, metrics, bounded Grail DQL |
-| `itops-argocd` | `itops-argocd` | applications, health/sync state, resource tree, drift, events |
+| `itops-dynatrace` | official remote `dynatrace-platform` | Kiro OAuth + Microsoft SSO, bounded Grail analysis |
+| `itops-argocd` | `itops-argocd` | CLI SSO, applications, health/sync state, resource tree, drift, events |
 | `itops-source-code` | `itops-source-code` | allowlisted Bitbucket/GitLab trees, files, commits, diffs, reviews, and CI evidence |
 
-Each agent has a portable Agent Skill, its own inline stdio MCP server, exact MCP permission matches, no generic read/shell/write/web tools, no inherited global/workspace MCP configuration, persistent steering, and v3 hooks. The empty, Git-ignored `wiki/` folder is ready for a private Karpathy-style knowledge base.
+Each agent has a portable Agent Skill and exactly one isolated inline MCP server. Six are local stdio servers; Dynatrace uses the official remote MCP with Kiro-managed OAuth. Profiles have narrow permissions, no generic read/shell/write/web tools, no inherited global/workspace MCP configuration, persistent steering, and v3 hooks. The empty, Git-ignored `wiki/` folder is ready for a private Karpathy-style knowledge base.
 
 ## Prerequisites
 
 - Windows 11 and PowerShell 7 recommended
 - Node.js 22.12 or newer on an even-numbered/LTS release (Node 24 LTS is recommended)
 - Kiro CLI with the v3 engine
+- Microsoft ODBC Driver 18 for SQL Server
+- a current `argocd` CLI with `account session-token`
+- Windows `curl.exe` with SSPI and SPNEGO for Splunk Kerberos
 - network routes and enterprise CA certificates for the target systems
-- dedicated read-only service identities
+- read-only API identities plus correctly scoped Microsoft/Windows user access
 
 Install Kiro CLI on Windows from an ordinary PowerShell terminal:
 
@@ -48,22 +51,23 @@ The installer:
 
 1. checks Node, npm, and Kiro CLI
 2. installs pinned npm dependencies
-3. compiles and tests the seven MCP servers
+3. compiles and tests the six local MCP servers and validates the remote Dynatrace profile
 4. validates all seven skills and agent profiles
 5. creates the ignored `config\itops.env` from the single template
 
 Edit `config\itops.env`. Do not put real secrets in `config\itops.env.example`.
 
-Provision the external identities first; see [Read-only setup](docs/READ_ONLY_SETUP.md).
+Provision the external identities first; see [Authentication](docs/AUTHENTICATION.md) and [Read-only setup](docs/READ_ONLY_SETUP.md).
 
 ## Validate and start
 
 ```powershell
+.\scripts\Initialize-ItOpsAuth.ps1
 .\scripts\Test-ItOps.ps1
 .\scripts\Start-ItOps.ps1
 ```
 
-`Test-ItOps.ps1` runs static verification, runtime security checks, and a read-only health call through every enabled MCP server. `Start-ItOps.ps1` uses `--require-mcp-startup`, so a broken server fails the session instead of silently removing evidence access.
+`Initialize-ItOpsAuth.ps1` reuses or opens Microsoft-backed Argo CD CLI SSO. Dynatrace browser OAuth is handled by Kiro when that specialist first starts. `Test-ItOps.ps1` runs static verification, runtime security checks, read-only health calls for enabled local servers, and defers the remote Dynatrace OAuth check to Kiro. `Start-ItOps.ps1` uses `--require-mcp-startup`, so a broken server fails instead of silently removing evidence access.
 
 Inside Kiro, begin with a concrete prompt:
 
@@ -121,9 +125,9 @@ This avoids broad database and repository exploration and lets the orchestrator 
 
 The guarantee is layered:
 
-1. vendor-side read-only roles/scopes
+1. vendor-side read-only roles/scopes, Windows access, and OAuth scope intersection
 2. no mutating MCP tool surfaces
-3. conservative SQL/SPL/Mongo/DQL and Argo allowlists
+3. Kerberos/SSO helpers without a shell, SQL replica proof, and conservative SQL/SPL/Mongo/Argo allowlists
 4. TLS, timeout, row/document/byte, and pool bounds
 5. Kiro v3 permissions denying shell and filesystem writes
 6. a blocking v3 `PreToolUse` hook
@@ -133,6 +137,8 @@ Prompts are not considered a security boundary. External credentials remain the 
 ## Configuration
 
 The one template is [config/itops.env.example](config/itops.env.example). Every integration has an `ITOPS_ENABLE_*` switch. Disabled integrations are skipped by health checks and fail closed if an agent tries to use them.
+
+Authentication is also selected in this file. Defaults are Windows Kerberos for Splunk, Windows Integrated Authentication for SQL Server, Argo CD CLI SSO, and Kiro-managed Dynatrace OAuth. Jira, Confluence, Bitbucket, and GitLab use their configured read-only API/access tokens.
 
 For private certificate authorities, set `NODE_EXTRA_CA_CERTS` or `MONGODB_TLS_CA_FILE`. Do not set `SQLSERVER_TRUST_SERVER_CERTIFICATE=true` or use MongoDB TLS-insecure URI options; runtime validation rejects them.
 
@@ -147,6 +153,7 @@ It enables knowledge and on-demand MCP Tool Search. Tool Search is optional beca
 ## Documentation
 
 - [Architecture and Kiro v3 features](docs/ARCHITECTURE.md)
+- [Windows authentication and Microsoft SSO](docs/AUTHENTICATION.md)
 - [Read-only identity setup](docs/READ_ONLY_SETUP.md)
 - [Operating and investigating](docs/OPERATIONS.md)
 - [Security model and production checklist](SECURITY.md)
@@ -154,6 +161,10 @@ It enables knowledge and on-demand MCP Tool Search. Tool Search is optional beca
 ## Important limitations
 
 - Live connections cannot be verified until you provide network access and credentials.
+- Splunk Kerberos works only when the configured HTTPS endpoint advertises HTTP Negotiate; direct Splunk REST may still require a token or Kerberos-capable reverse proxy.
+- SQL replica state can be proven only immediately after connection. The harness requests read-only routing and fails before every investigation query unless the session is a readable AG secondary.
+- Dynatrace Microsoft web login is not an API credential. A confidential Authorization Code OAuth client is still required for Kiro-managed browser OAuth.
+- Argo CD CLI SSO requires a current CLI and an SSO context whose user/group has read-only RBAC.
 - Kiro CLI v3 is Early Access; validate profiles again after Kiro upgrades.
 - Jira/Confluence defaults target Atlassian Cloud. Data Center uses bearer PAT and may require path changes in the environment file.
 - Argo CD endpoint availability is release-dependent; verify against your server's `/swagger-ui`.
@@ -170,10 +181,10 @@ Research was checked on 2026-07-23 against primary vendor documentation:
 - [Kiro CLI 3.0](https://kiro.dev/docs/cli/v3/), [agent config and knowledge-base resources](https://kiro.dev/docs/cli/custom-agents/configuration-reference/), [permissions](https://kiro.dev/docs/cli/v3/permissions/), [hooks](https://kiro.dev/docs/cli/v3/hooks/), [skills](https://kiro.dev/docs/cli/skills/), [subagents](https://kiro.dev/docs/cli/chat/subagents/), and [specs](https://kiro.dev/docs/cli/v3/specs/)
 - [Andrej Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
 - [Splunk search REST endpoints](https://help.splunk.com/en/splunk-enterprise/leverage-rest-apis/rest-api-reference/9.4/search-endpoints/search-endpoint-descriptions) and [Simple XML reference](https://help.splunk.com/en/splunk-enterprise/create-dashboards-and-reports/simple-xml-dashboards/9.0/simple-xml-reference/simple-xml-reference)
-- [SQL Server read-only routing](https://learn.microsoft.com/en-us/sql/database-engine/availability-groups/windows/listeners-client-connectivity-application-failover) and [Tedious read-only intent](https://tediousjs.github.io/tedious/api-connection.html)
+- [SQL Server read-only routing](https://learn.microsoft.com/en-us/sql/database-engine/availability-groups/windows/listeners-client-connectivity-application-failover), [`sys.fn_hadr_is_primary_replica`](https://learn.microsoft.com/en-us/sql/relational-databases/system-functions/sys-fn-hadr-is-primary-replica-transact-sql), and [node-mssql Windows authentication](https://tediousjs.github.io/node-mssql/)
 - [MongoDB read preference](https://www.mongodb.com/docs/manual/core/read-preference/) and [Amazon DocumentDB RBAC](https://docs.aws.amazon.com/documentdb/latest/developerguide/role_based_access_control.html)
-- [Dynatrace Problems API](https://docs.dynatrace.com/docs/dynatrace-api/environment-api/problems-v2/problems/get-problems-list), [Metrics API](https://docs.dynatrace.com/docs/dynatrace-api/environment-api/metric-v2), and [Grail Query API](https://developer.dynatrace.com/develop/platform-services/services/grail-service/)
-- [Argo CD API](https://argo-cd.readthedocs.io/en/stable/developer-guide/api-docs/) and [RBAC](https://argo-cd.readthedocs.io/en/stable/operator-manual/rbac/)
+- [Dynatrace MCP](https://docs.dynatrace.com/docs/dynatrace-intelligence/dynatrace-mcp), [OAuth clients](https://docs.dynatrace.com/docs/manage/identity-access-management/access-tokens-and-oauth-clients/oauth-clients), and [Microsoft sign-in](https://docs.dynatrace.com/docs/manage/identity-access-management/user-and-group-management/sign-in-with-microsoft)
+- [Argo CD API](https://argo-cd.readthedocs.io/en/stable/developer-guide/api-docs/), [Microsoft SSO](https://argo-cd.readthedocs.io/en/stable/operator-manual/user-management/microsoft/), [`account session-token`](https://argo-cd.readthedocs.io/en/latest/user-guide/commands/argocd_account_session-token/), and [RBAC](https://argo-cd.readthedocs.io/en/stable/operator-manual/rbac/)
 - [Jira issue search](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/) and [Confluence CQL search](https://developer.atlassian.com/cloud/confluence/rest/v1/api-group-search/)
 - [Bitbucket source](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-source/), [commits](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-commits/), [pull requests](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-pullrequests/), and [pipelines](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-pipelines/)
 - [GitLab repository files](https://docs.gitlab.com/api/repository_files/), [repositories](https://docs.gitlab.com/api/repositories/), [commits](https://docs.gitlab.com/api/commits/), [merge requests](https://docs.gitlab.com/api/merge_requests/), [pipelines](https://docs.gitlab.com/api/pipelines/), and [jobs](https://docs.gitlab.com/api/jobs/)

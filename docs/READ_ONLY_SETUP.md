@@ -4,32 +4,36 @@ Use a unique identity per environment and harness. Store credentials only in the
 
 ## Splunk
 
-Create a role with:
+`SPLUNK_AUTH_MODE=kerberos` uses the current Windows logon through `curl.exe` SSPI/SPNEGO. Confirm the configured HTTPS REST endpoint advertises HTTP `Negotiate`; this may require an enterprise reverse proxy because a direct Splunk management endpoint can still require Splunk-native token authentication.
+
+Map the Kerberos identity to a role with:
 
 - `search` capability only as required
 - search access restricted to the relevant indexes
 - no `edit_*`, `admin_*`, `delete_by_keyword`, scheduling, email, lookup-write, or output capabilities
-- a token for a dedicated service user
+- no API token when Kerberos is used; otherwise a token for a dedicated service user
 
 The harness dispatches searches through `search/v2/jobs/export`; dispatching a query is allowed, but it exposes no saved-search or dashboard write endpoint. Validate the role by confirming a benign search works and an `outputlookup` search is denied by both the MCP guard and Splunk.
 
 ## SQL Server
 
-Point `SQLSERVER_HOST` to an Availability Group listener configured for read-only routing. The driver sets `readOnlyIntent=true`.
+Point `SQLSERVER_HOST` to an Availability Group listener configured for read-only routing and provide `SQLSERVER_DATABASE`. With `SQLSERVER_AUTH_MODE=windows`, the harness uses the Windows identity running Kiro through Microsoft ODBC Driver 18. The connection fixes `ApplicationIntent=ReadOnly` and verifies a readable secondary before the pool is exposed and before every query.
 
-Create a dedicated SQL login/user and grant only the required tables or schemas. A database administrator can adapt this example:
+Grant the Windows account only the required tables or schemas. It also needs `VIEW SERVER STATE` to prove the local AG role. A database administrator can adapt this example:
 
 ```sql
-CREATE LOGIN itops_reader WITH PASSWORD = '<generated secret>';
+CREATE LOGIN [CORP\itops-user] FROM WINDOWS;
 USE MobileApp;
-CREATE USER itops_reader FOR LOGIN itops_reader;
-GRANT SELECT ON SCHEMA::dbo TO itops_reader;
-DENY INSERT, UPDATE, DELETE, EXECUTE, ALTER, CONTROL TO itops_reader;
+CREATE USER [CORP\itops-user] FOR LOGIN [CORP\itops-user];
+GRANT SELECT ON SCHEMA::dbo TO [CORP\itops-user];
+DENY INSERT, UPDATE, DELETE, EXECUTE, ALTER TO [CORP\itops-user];
+USE master;
+GRANT VIEW SERVER STATE TO [CORP\itops-user];
 ```
 
-Prefer grants on specific schemas/tables over `db_datareader` when the database contains unrelated sensitive data. Do not grant `VIEW SERVER STATE` unless a documented investigation need justifies it. Keep TLS encryption on and install the SQL Server issuing CA rather than trusting the server certificate.
+Prefer grants on specific schemas/tables over `db_datareader` when the database contains unrelated sensitive data. Do not add the identity to an owner or write-capable role. The `VIEW SERVER STATE` grant is used only for the fail-closed replica proof; if policy forbids it, this harness intentionally cannot claim or use replica-only access. Keep TLS encryption on and install the SQL Server issuing CA rather than trusting the server certificate.
 
-Verify the health output reports the expected database and updateability. Read-only intent helps routing; the SELECT-only login is the authorization boundary.
+Verify health reports `replicaVerified: true`, the expected database, `is_primary_replica: 0`, and `READ_ONLY`. Read-only intent helps routing, the database state prevents writes, and narrow Windows authorization remains the identity boundary.
 
 ## MongoDB / Amazon DocumentDB
 
@@ -58,37 +62,33 @@ Narrow `MONGODB_COLLECTION_ALLOWLIST`; credential scope remains the primary cont
 
 ## Dynatrace
 
-For Environment API v2, create a token with only the scopes used:
+Microsoft/Dynatrace browser sign-in is not itself API authentication. Ask a Dynatrace administrator to create a confidential OAuth client using the Authorization Code grant and the exact loopback redirect URI from the environment template. Grant only the remote MCP and Grail read scopes listed in `.kiro/agents/itops-dynatrace.md`, including:
 
-- `problems.read`
-- `entities.read`
-- `metrics.read`
-- `logs.read` only if classic log queries are needed
-
-For Grail DQL, create an OAuth client with read scopes only:
-
+- `mcp-gateway:servers:invoke`
+- `mcp-gateway:servers:read`
+- `ai:operator:execute`
 - `storage:buckets:read`
+- `storage:system:read`
 - `storage:logs:read`
 - `storage:spans:read`
 - `storage:events:read`
 - `storage:metrics:read`
+- `storage:entities:read`
 
-Use permission conditions to restrict buckets, security context, management zone, entity, or fields where possible. The runtime rejects OAuth scope strings containing write/admin/manage/delete terms.
-
-Set `DYNATRACE_DQL_ENABLED=false` if the environment has only classic APIs.
+Use permission conditions to restrict buckets, security context, management zone, entity, or fields where possible. Kiro performs browser OAuth and refreshes the access token; effective permissions are intersected with the signed-in user.
 
 ## Argo CD
 
-Use `role:readonly` or a narrower custom role. A project-scoped example:
+Use Microsoft/Entra SSO mapped to `role:readonly` or a narrower custom role. A project-scoped example:
 
 ```text
 p, role:itops-readonly, applications, get, mobile-prod/*, allow
 p, role:itops-readonly, projects, get, mobile-prod, allow
 ```
 
-The harness does not expose pod logs or exec. Do not grant `sync`, `override`, `action/*`, `create`, `update`, `delete`, or `exec`. Bind the token to the read-only role and narrow `ARGOCD_PROJECT_ALLOWLIST` and `ARGOCD_APPLICATION_ALLOWLIST`.
+The harness does not expose pod logs or exec. Do not grant `sync`, `override`, `action/*`, `create`, `update`, `delete`, or `exec`. Bind the SSO group to the read-only role and narrow `ARGOCD_PROJECT_ALLOWLIST` and `ARGOCD_APPLICATION_ALLOWLIST`.
 
-Verify endpoints against the Argo CD server's `/swagger-ui`.
+Install a current Argo CD CLI, run `scripts\Initialize-ItOpsAuth.ps1`, and verify endpoints against the server's `/swagger-ui`.
 
 ## Jira and Confluence
 

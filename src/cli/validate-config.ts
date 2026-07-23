@@ -6,10 +6,13 @@ import {
   enabled,
   env,
   envBoolean,
+  envChoice,
   envCsv,
   envInteger,
+  requireLoopbackUrl,
   requireSafeBaseUrl,
 } from "../common/env.js";
+import { configuredExecutable } from "../common/process.js";
 import {
   assertBitbucketRepository,
   assertGitLabProject,
@@ -136,6 +139,30 @@ async function validateAgents(): Promise<void> {
           ? Object.keys(config.mcpServers as Record<string, unknown>)
           : [];
       check(servers.length === 1, `${file}: must declare exactly one MCP server`);
+      if (file === "itops-dynatrace.md") {
+        const dynatraceServer = (
+          config.mcpServers as Record<string, Record<string, unknown>>
+        )["dynatrace-platform"];
+        const oauth = dynatraceServer?.oauth as
+          | { clientId?: unknown; clientSecret?: unknown; redirectUri?: unknown; oauthScopes?: unknown[] }
+          | undefined;
+        check(dynatraceServer?.type === "http", `${file}: Dynatrace must use remote HTTP MCP`);
+        check(
+          dynatraceServer?.url === "${DYNATRACE_MCP_URL}",
+          `${file}: Dynatrace MCP URL must come from the environment`,
+        );
+        check(
+          oauth?.clientId === "${DYNATRACE_OAUTH_CLIENT_ID}" &&
+            oauth?.clientSecret === "${DYNATRACE_OAUTH_CLIENT_SECRET}" &&
+            oauth?.redirectUri === "${DYNATRACE_OAUTH_REDIRECT_URI}",
+          `${file}: Dynatrace OAuth values must come from the environment`,
+        );
+        const scopes = (oauth?.oauthScopes ?? []).map(String);
+        check(
+          scopes.length > 0 && !scopes.some((scope) => /(?:write|delete|manage|admin)/i.test(scope)),
+          `${file}: Dynatrace OAuth scopes must be read-only`,
+        );
+      }
       const permissions = config.permissions as { rules?: Array<Record<string, unknown>> } | undefined;
       const rules = permissions?.rules ?? [];
       check(
@@ -190,18 +217,33 @@ async function validateSkills(): Promise<void> {
         Object.keys(config).every((key) => ["name", "description"].includes(key)),
         `${name}: unsupported SKILL.md frontmatter field`,
       );
+      const interfaceConfig = parse(
+        await readFile(join(directory, name, "agents", "openai.yaml"), "utf8"),
+      ) as {
+        interface?: {
+          display_name?: string;
+          short_description?: string;
+          default_prompt?: string;
+        };
+      };
+      check(
+        Boolean(interfaceConfig.interface?.display_name),
+        `${name}: openai.yaml must declare a display name`,
+      );
+      check(
+        (interfaceConfig.interface?.short_description?.length ?? 0) >= 25 &&
+          (interfaceConfig.interface?.short_description?.length ?? 0) <= 64,
+        `${name}: openai.yaml short description must be 25-64 characters`,
+      );
+      check(
+        interfaceConfig.interface?.default_prompt?.includes(`$${name}`),
+        `${name}: openai.yaml default prompt must mention $${name}`,
+      );
       if (name === "itops-orchestrate") {
         const description = String(config.description);
         check(
           description.includes("Use only") && description.includes("do not use for routine"),
           `${name}: full-investigation skill must not trigger for routine chat`,
-        );
-        const interfaceConfig = parse(
-          await readFile(join(directory, name, "agents", "openai.yaml"), "utf8"),
-        ) as { interface?: { default_prompt?: string } };
-        check(
-          interfaceConfig.interface?.default_prompt?.includes("$itops-orchestrate"),
-          `${name}: openai.yaml default prompt must mention $itops-orchestrate`,
         );
       }
     } catch (error) {
@@ -255,6 +297,8 @@ async function validateLayout(): Promise<void> {
     "AGENTS.md",
     "README.md",
     "config/itops.env.example",
+    "docs/AUTHENTICATION.md",
+    "scripts/Initialize-ItOpsAuth.ps1",
     "wiki/.gitkeep",
     ".kiro/steering/product.md",
     ".kiro/steering/tech.md",
@@ -267,7 +311,6 @@ async function validateLayout(): Promise<void> {
     "dist/mcp/splunk.js",
     "dist/mcp/sql-server.js",
     "dist/mcp/mongodb-docdb.js",
-    "dist/mcp/dynatrace.js",
     "dist/mcp/argocd.js",
     "dist/mcp/source-code.js",
     ".kiro/skills/itops-orchestrate/references/wiki-evidence.md",
@@ -319,16 +362,35 @@ function validateRuntime(): void {
       safeUrl("ATLASSIAN_BASE_URL");
     }
     if (enabled("SPLUNK")) {
-      requireVariables(["SPLUNK_BASE_URL", "SPLUNK_TOKEN"]);
+      requireVariables(["SPLUNK_BASE_URL"]);
       safeUrl("SPLUNK_BASE_URL");
+      const mode = envChoice("SPLUNK_AUTH_MODE", ["kerberos", "token"] as const, "kerberos");
+      if (mode === "kerberos") {
+        try {
+          configuredExecutable("SPLUNK_CURL_PATH", "curl.exe", ["curl", "curl.exe"]);
+        } catch (error) {
+          errors.push(error instanceof Error ? error.message : String(error));
+        }
+        try {
+          if (requireSafeBaseUrl("SPLUNK_BASE_URL").protocol !== "https:") {
+            errors.push("SPLUNK_AUTH_MODE=kerberos requires an HTTPS endpoint");
+          }
+        } catch {
+          // safeUrl already recorded the actionable URL error.
+        }
+      } else {
+        requireVariables(["SPLUNK_TOKEN"]);
+        envChoice("SPLUNK_AUTH_SCHEME", ["bearer", "splunk"] as const, "bearer");
+      }
     }
     if (enabled("SQLSERVER")) {
-      requireVariables([
-        "SQLSERVER_HOST",
-        "SQLSERVER_DATABASE",
-        "SQLSERVER_USERNAME",
-        "SQLSERVER_PASSWORD",
-      ]);
+      requireVariables(["SQLSERVER_HOST", "SQLSERVER_DATABASE"]);
+      const mode = envChoice("SQLSERVER_AUTH_MODE", ["windows", "sql"] as const, "windows");
+      if (mode === "windows") {
+        requireVariables(["SQLSERVER_ODBC_DRIVER"]);
+      } else {
+        requireVariables(["SQLSERVER_USERNAME", "SQLSERVER_PASSWORD"]);
+      }
       if (!envBoolean("SQLSERVER_ENCRYPT", true)) errors.push("SQLSERVER_ENCRYPT must remain true");
       if (envBoolean("SQLSERVER_TRUST_SERVER_CERTIFICATE", false)) {
         errors.push("SQLSERVER_TRUST_SERVER_CERTIFICATE must remain false; install the issuing CA instead");
@@ -345,28 +407,54 @@ function validateRuntime(): void {
       }
     }
     if (enabled("DYNATRACE")) {
-      requireVariables(["DYNATRACE_ENV_URL", "DYNATRACE_API_TOKEN"]);
-      safeUrl("DYNATRACE_ENV_URL");
-      if (envBoolean("DYNATRACE_DQL_ENABLED", true)) {
-        requireVariables(["DYNATRACE_PLATFORM_URL"]);
-        safeUrl("DYNATRACE_PLATFORM_URL");
-        if (!env("DYNATRACE_PLATFORM_TOKEN")) {
-          requireVariables([
-            "DYNATRACE_OAUTH_TOKEN_URL",
-            "DYNATRACE_OAUTH_CLIENT_ID",
-            "DYNATRACE_OAUTH_CLIENT_SECRET",
-            "DYNATRACE_OAUTH_SCOPES",
-          ]);
-          safeUrl("DYNATRACE_OAUTH_TOKEN_URL");
+      requireVariables([
+        "DYNATRACE_MCP_URL",
+        "DYNATRACE_OAUTH_CLIENT_ID",
+        "DYNATRACE_OAUTH_CLIENT_SECRET",
+        "DYNATRACE_OAUTH_REDIRECT_URI",
+      ]);
+      safeUrl("DYNATRACE_MCP_URL");
+      try {
+        const mcpUrl = requireSafeBaseUrl("DYNATRACE_MCP_URL");
+        if (!mcpUrl.pathname.endsWith("/platform-reserved/mcp-gateway/v0.1/servers/dynatrace-mcp/mcp")) {
+          errors.push("DYNATRACE_MCP_URL must target the official Dynatrace MCP gateway path");
         }
-        if (/(?:write|delete|manage|admin)/i.test(env("DYNATRACE_OAUTH_SCOPES"))) {
-          errors.push("DYNATRACE_OAUTH_SCOPES contains a non-read scope");
-        }
+        requireLoopbackUrl("DYNATRACE_OAUTH_REDIRECT_URI");
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error));
       }
     }
     if (enabled("ARGOCD")) {
-      requireVariables(["ARGOCD_BASE_URL", "ARGOCD_TOKEN"]);
+      requireVariables(["ARGOCD_BASE_URL"]);
       safeUrl("ARGOCD_BASE_URL");
+      const mode = envChoice("ARGOCD_AUTH_MODE", ["cli-sso", "token"] as const, "cli-sso");
+      if (mode === "cli-sso") {
+        requireVariables(["ARGOCD_CLI_CONTEXT", "ARGOCD_CLI_SERVER"]);
+        try {
+          configuredExecutable("ARGOCD_CLI_PATH", "argocd.exe", ["argocd", "argocd.exe"]);
+          const base = requireSafeBaseUrl("ARGOCD_BASE_URL");
+          const serverValue = env("ARGOCD_CLI_SERVER", { required: true });
+          const cliServer = new URL(
+            serverValue.includes("://") ? serverValue : `https://${serverValue}`,
+          );
+          if (
+            cliServer.protocol !== "https:" ||
+            cliServer.username ||
+            cliServer.password ||
+            cliServer.search ||
+            cliServer.hash
+          ) {
+            errors.push("ARGOCD_CLI_SERVER must be an HTTPS server without credentials, query, or fragment");
+          }
+          if (cliServer.host.toLowerCase() !== base.host.toLowerCase()) {
+            errors.push("ARGOCD_CLI_SERVER must match the ARGOCD_BASE_URL host and port");
+          }
+        } catch (error) {
+          errors.push(error instanceof Error ? error.message : String(error));
+        }
+      } else {
+        requireVariables(["ARGOCD_TOKEN"]);
+      }
       if (env("ARGOCD_PROJECT_ALLOWLIST", { defaultValue: "*", allowPlaceholder: true }) === "*") {
         warnings.push("ARGOCD_PROJECT_ALLOWLIST=*; narrow it when possible");
       }

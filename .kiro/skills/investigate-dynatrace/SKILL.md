@@ -1,6 +1,6 @@
 ---
 name: investigate-dynatrace
-description: Investigate production incidents in Dynatrace using read-only Problems API, entity data, Metrics API, and bounded Grail DQL; correlate mobile/backend health, errors, latency, saturation, traces, logs, and deployments. Use for Davis problems, SLO degradation, service topology, mobile impact, and observability evidence.
+description: Investigate production incidents through the official read-only Dynatrace remote MCP and its bounded Data Analysis Agent; correlate mobile/backend health, Davis analysis, errors, latency, saturation, traces, logs, events, metrics, and deployments. Use for Davis problems, SLO degradation, service topology, mobile impact, and observability evidence.
 ---
 
 # Investigate with Dynatrace
@@ -9,14 +9,14 @@ Read [dynatrace-playbook.md](references/dynatrace-playbook.md) before selecting 
 
 ## Correlate the incident
 
-1. Query problems for the exact incident and baseline intervals.
+1. Use the official remote MCP to query the exact incident and baseline intervals.
 2. Resolve affected entities, services, process groups, hosts, Kubernetes workloads, and management zones.
 3. Compare request count, error rate, latency percentiles, saturation, and availability against baseline.
-4. Use Grail DQL for allowlisted logs, spans, events, business events, or metrics only when it answers a defined gap.
+4. Ask the Data Analysis Agent for bounded Grail analysis of logs, spans, events, or metrics only when it answers a defined gap.
 5. Align deployment/restart/config markers with symptom onset.
 6. Search for healthy controls and unaffected cohorts.
 
-Use bounded records and bytes. Do not retrieve sensitive span/log fields unnecessarily.
+Keep every request time-bound and scoped to named entities or services. The official MCP returns at most 1,000 records; reduce the query rather than treating truncation as completeness. Do not retrieve sensitive span/log fields unnecessarily.
 
 ## Preserve evidence boundaries
 
@@ -28,7 +28,7 @@ Dynatrace problem root-cause analysis is evidence, not automatic proof. Validate
 - missing telemetry versus healthy service
 - sampling/retention versus true absence
 
-Never ingest an event, metric, or log. Never change settings, dashboards, tags, tokens, or alerting.
+Never ingest an event, metric, or log. Never change settings, workflows, dashboards, tags, tokens, or alerting. If OAuth, a storage scope, or a user permission is missing, return an evidence gap. Never request a wider client or attempt to reuse browser cookies.
 
 ## Return the evidence package
 
@@ -36,7 +36,7 @@ Return:
 
 - UTC windows and management-zone/entity scope
 - problem/display IDs
-- exact selectors and DQL
+- exact questions, selectors, and DQL surfaced by the MCP
 - quantitative baseline deltas
 - affected and unaffected cohorts
 - deployment/restart alignment

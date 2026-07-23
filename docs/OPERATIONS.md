@@ -5,10 +5,11 @@
 Run:
 
 ```powershell
+.\scripts\Initialize-ItOpsAuth.ps1
 .\scripts\Start-ItOps.ps1
 ```
 
-This command always opens `itops-orchestrator`. Keep the conversation there. Do not run or switch to `itops-splunk`, `itops-dynatrace`, or another specialist; the orchestrator selects and coordinates them internally.
+The authentication initializer reuses or opens Argo CD Microsoft SSO. Dynatrace OAuth opens in the browser when Kiro first starts that specialist. `Start-ItOps.ps1` runs the initializer automatically and always opens `itops-orchestrator`. Keep the conversation there. Do not run or switch to a specialist; the orchestrator selects and coordinates them internally.
 
 The default interaction is an ordinary operational question. Examples:
 
@@ -37,6 +38,8 @@ If a value is unknown, say so. Do not substitute an assumed environment silently
 
 - `Ctrl+G` opens the subagent monitor.
 - `/mcp` shows server startup and tool status.
+- `/mcp auth` forces browser OAuth for the remote Dynatrace server.
+- `/mcp logout` removes Kiro's stored Dynatrace OAuth credentials.
 - `/context show` shows loaded skills/resources.
 - `/hooks` shows active hooks.
 - `/spec itops-harness` opens the implementation spec.
@@ -124,7 +127,7 @@ Run:
 Also re-run:
 
 ```powershell
-kiro-cli agent validate .\.kiro\agents\itops-orchestrator.md
+kiro-cli agent validate --path .\.kiro\agents\itops-orchestrator.md
 kiro-cli chat --v3 --agent itops-orchestrator --require-mcp-startup
 ```
 
@@ -133,6 +136,10 @@ Kiro hot-reloads agent/MCP profile edits, but dependency or compiled server chan
 ## Troubleshooting
 
 - MCP startup failure: run `npm run build`, then `npm run health`.
+- Splunk Kerberos failure: verify `curl.exe --version` lists SSPI/SPNEGO, the Windows ticket/SPN is valid, and the HTTPS endpoint returns `WWW-Authenticate: Negotiate`.
+- SQL replica refusal: verify the host is the AG listener, the database participates in the AG, read-only routing is configured, and the Windows identity can execute the replica proof.
+- Argo CD SSO failure: run `scripts\Initialize-ItOpsAuth.ps1`, verify the context name, and confirm your CLI supports `account session-token`.
+- Dynatrace OAuth failure: verify the confidential client, exact loopback callback, remote MCP URL, read scopes, and `/mcp auth`.
 - TLS failure: install/set the correct CA; never disable verification.
 - HTTP 401/403: verify the read-only token and resource permission.
 - Empty evidence: check window, timezone, retention, sampling, index/collection/project/repository allowlist, revision mapping, and replica lag.
