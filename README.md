@@ -59,6 +59,266 @@ Edit `config\itops.env`. Do not put real secrets in `config\itops.env.example`.
 
 Provision the external identities first; see [Authentication](docs/AUTHENTICATION.md) and [Read-only setup](docs/READ_ONLY_SETUP.md).
 
+## Connect every system
+
+All connection settings live in the ignored `config\itops.env` file. If the installer did not create it, copy the template:
+
+```powershell
+Copy-Item .\config\itops.env.example .\config\itops.env
+notepad .\config\itops.env
+```
+
+Keep real passwords, tokens, client secrets, connection strings, and internal hostnames only in `config\itops.env`. Never put them in `config\itops.env.example`, an agent file, the wiki, a report, or Git. Set an integration's `ITOPS_ENABLE_*` value to `false` until its identity, network route, TLS trust, and allowlists are ready; enabled but incomplete integrations intentionally fail validation.
+
+Use production hostnames with HTTPS and your enterprise CA. Do not weaken certificate verification to make a connection pass. The service-side identity is the final security boundary, so each identity must be read-only even though the harness also removes mutating tools.
+
+### Jira and Confluence
+
+For Atlassian Cloud, create an API token for a dedicated account that has only Jira **Browse Projects** and Confluence **View** access to the required projects and spaces. The token replaces the password in HTTP Basic authentication; it is not a Jira password. See Atlassian's [Jira](https://developer.atlassian.com/cloud/jira/platform/basic-auth-for-rest-apis/) and [Confluence](https://developer.atlassian.com/cloud/confluence/basic-auth-for-rest-apis/) authentication documentation.
+
+```dotenv
+ITOPS_ENABLE_ATLASSIAN=true
+ATLASSIAN_BASE_URL=https://YOUR_SITE.atlassian.net
+ATLASSIAN_AUTH_MODE=basic
+ATLASSIAN_EMAIL=itops-reader@example.com
+ATLASSIAN_API_TOKEN=REPLACE_ME
+ATLASSIAN_JIRA_SEARCH_PATH=/rest/api/3/search/jql
+ATLASSIAN_CONFLUENCE_SEARCH_PATH=/wiki/rest/api/search
+```
+
+The token must be valid for direct REST requests to `YOUR_SITE.atlassian.net`. If your organization issues only scoped tokens that require Atlassian's `api.atlassian.com/ex/...` gateway URLs, verify the URLs with your Atlassian administrator before enabling this shared-base connector.
+
+For Jira/Confluence Data Center, use a read-only personal access token and set `ATLASSIAN_AUTH_MODE=bearer`, the Data Center base URL, and the REST paths used by that installation. A `401` means the credential or authentication mode is wrong; a `403` normally means the account is authenticated but lacks access to the requested project or space.
+
+### Splunk
+
+The Windows default uses the current signed-in user through `curl.exe`, SSPI, and SPNEGO:
+
+```dotenv
+ITOPS_ENABLE_SPLUNK=true
+SPLUNK_AUTH_MODE=kerberos
+SPLUNK_BASE_URL=https://splunk-rest.example.com:8089
+SPLUNK_CURL_PATH=curl.exe
+SPLUNK_CURL_CA_BUNDLE=
+```
+
+Before enabling it, run:
+
+```powershell
+curl.exe --version
+klist
+```
+
+`curl.exe --version` must list `SSPI` and `SPNEGO`, and `klist` must show a valid Windows Kerberos ticket. The configured endpoint must advertise HTTP `Negotiate`; in many enterprises this is a Kerberos-enabled reverse proxy in front of Splunk because a direct Splunk management endpoint may use token authentication instead. The Splunk role needs search access only to the required indexes. Do not grant search scheduling, lookup writes, delete, alert actions, or email capabilities.
+
+If Kerberos is unavailable, use a read-only Splunk token:
+
+```dotenv
+SPLUNK_AUTH_MODE=token
+SPLUNK_TOKEN=REPLACE_ME
+SPLUNK_AUTH_SCHEME=Bearer
+```
+
+Some Splunk deployments expect `SPLUNK_AUTH_SCHEME=Splunk`; use the scheme configured by your administrator. The harness bounds the time range and result count, blocks dangerous SPL commands, and generates dashboard XML only as a local offline artifact—it never uploads a dashboard.
+
+### SQL Server readable replica
+
+Windows Integrated Authentication is the preferred mode:
+
+```dotenv
+ITOPS_ENABLE_SQLSERVER=true
+SQLSERVER_AUTH_MODE=windows
+SQLSERVER_HOST=ag-listener.example.com
+SQLSERVER_PORT=1433
+SQLSERVER_DATABASE=ExactMobileDatabaseName
+SQLSERVER_ODBC_DRIVER=ODBC Driver 18 for SQL Server
+SQLSERVER_MULTI_SUBNET_FAILOVER=true
+SQLSERVER_ENCRYPT=true
+SQLSERVER_TRUST_SERVER_CERTIFICATE=false
+```
+
+Install Microsoft ODBC Driver 18 and grant the current Windows user only `CONNECT`, `SELECT` on the required schemas/tables or views, and the minimum permission needed to read availability-group state (`VIEW SERVER STATE`, or the version-specific equivalent your DBA approves). Point `SQLSERVER_HOST` at the availability-group listener configured for read-only routing, and provide the exact database name.
+
+It is impossible to prove a server's replica role before opening a network connection. The harness therefore connects with `ApplicationIntent=ReadOnly`, immediately performs only its role proof, and closes/refuses the connection unless all of these are true:
+
+- the connected database name exactly matches `SQLSERVER_DATABASE`
+- the database participates in an availability group
+- the replica is not primary
+- the database is not writable
+
+The same proof is repeated in every query batch before the bounded, parameterized `SELECT` or CTE is executed. This follows Microsoft's [read-only routing and `ApplicationIntent`](https://learn.microsoft.com/en-us/sql/database-engine/availability-groups/windows/listeners-client-connectivity-application-failover) model. The harness cannot make an incorrectly privileged SQL login safe, so the login must still be read-only.
+
+If Windows authentication is not possible, a dedicated SQL login is supported:
+
+```dotenv
+SQLSERVER_AUTH_MODE=sql
+SQLSERVER_USERNAME=itops_reader
+SQLSERVER_PASSWORD=REPLACE_ME
+```
+
+The replica proof remains mandatory in either mode. Do not enable the integration against a standalone database, a primary replica, a writable secondary, or an unknown database name.
+
+### MongoDB
+
+Create a database user with a read-only role on the one required database, restrict its network source, require TLS, and keep the collection allowlist narrow:
+
+```dotenv
+ITOPS_ENABLE_MONGODB=true
+MONGODB_MODE=mongodb
+MONGODB_URI=mongodb://itops_reader:REPLACE_ME@mongo.example.com:27017/?tls=true
+MONGODB_DATABASE=mobile
+MONGODB_READ_PREFERENCE=secondaryPreferred
+MONGODB_COLLECTION_ALLOWLIST=orders,transactions,users
+MONGODB_TLS_CA_FILE=C:\certificates\enterprise-ca.pem
+```
+
+The driver disables retryable writes, applies the configured read preference, and exposes only bounded find, safe aggregation, and schema-sampling tools. Review MongoDB's [connection-string and read-preference options](https://www.mongodb.com/docs/manual/reference/connection-string-options/). Percent-encode reserved characters in URI usernames and passwords.
+
+### Amazon DocumentDB
+
+The DocumentDB cluster must be reachable from the Windows PC through the approved VPN/VPC route, security groups, and DNS. Download the current AWS CA bundle and configure a read-only database user:
+
+```dotenv
+ITOPS_ENABLE_MONGODB=true
+MONGODB_MODE=documentdb
+MONGODB_URI=mongodb://itops_reader:REPLACE_ME@cluster.cluster-xxxxxxxxxxxx.eu-west-1.docdb.amazonaws.com:27017/?tls=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false
+MONGODB_DATABASE=mobile
+MONGODB_READ_PREFERENCE=secondaryPreferred
+MONGODB_COLLECTION_ALLOWLIST=orders,transactions,users
+MONGODB_TLS_CA_FILE=C:\certificates\global-bundle.pem
+```
+
+Use the cluster endpoint and AWS's documented [TLS, replica-set, and read-preference parameters](https://docs.aws.amazon.com/documentdb/latest/devguide/connect_programmatically.html). Percent-encode reserved credential characters. Do not add TLS-insecure options; runtime validation rejects them.
+
+### Dynatrace with Microsoft login
+
+Microsoft login authenticates the human user, but it is not by itself an MCP/API credential. A Dynatrace administrator must create a confidential OAuth client using the Authorization Code grant, allow the exact loopback redirect URI below, assign only the read scopes listed in `.kiro\agents\itops-dynatrace.md`, and give the Microsoft user access to that client and environment. Follow Dynatrace's [MCP](https://docs.dynatrace.com/docs/dynatrace-intelligence/dynatrace-mcp) and [OAuth client](https://docs.dynatrace.com/docs/manage/identity-access-management/access-tokens-and-oauth-clients/oauth-clients) setup.
+
+```dotenv
+ITOPS_ENABLE_DYNATRACE=true
+DYNATRACE_MCP_URL=https://YOUR_ENV.apps.dynatrace.com/platform-reserved/mcp-gateway/v0.1/servers/dynatrace-mcp/mcp
+DYNATRACE_OAUTH_CLIENT_ID=REPLACE_ME
+DYNATRACE_OAUTH_CLIENT_SECRET=REPLACE_ME
+DYNATRACE_OAUTH_REDIRECT_URI=http://127.0.0.1:7778/oauth/callback
+```
+
+The client ID and secret identify the OAuth application; the interactive Microsoft browser login identifies the user. Effective access is the intersection of the OAuth client's scopes and the user's Dynatrace permissions. Do not grant write/configuration scopes. If a future Dynatrace tool needs another read scope, review that scope and update the Dynatrace agent profile explicitly instead of granting broad access.
+
+Kiro opens the browser when the Dynatrace specialist is first needed. Inside Kiro, `/mcp auth` can start authentication manually and `/mcp logout` clears the cached session. `Test-ItOps.ps1` reports this remote check as deferred because the OAuth lifecycle belongs to Kiro.
+
+### Argo CD with Microsoft login
+
+Ask the Argo CD administrator to configure Microsoft Entra ID SSO and the CLI callback, then create an Argo CD RBAC role that can only `get` the allowlisted applications/projects and their read-only status resources. It must not allow sync, update, delete, action, exec, override, or repository-secret access. See Argo CD's [Microsoft SSO](https://argo-cd.readthedocs.io/en/stable/operator-manual/user-management/microsoft/), [RBAC](https://argo-cd.readthedocs.io/en/stable/operator-manual/rbac/), and [session-token](https://argo-cd.readthedocs.io/en/latest/user-guide/commands/argocd_account_session-token/) documentation.
+
+```dotenv
+ITOPS_ENABLE_ARGOCD=true
+ARGOCD_AUTH_MODE=cli-sso
+ARGOCD_BASE_URL=https://argocd.example.com
+ARGOCD_CLI_PATH=argocd.exe
+ARGOCD_CLI_SERVER=argocd.example.com
+ARGOCD_CLI_CONTEXT=itops-readonly
+ARGOCD_CLI_CONFIG=
+ARGOCD_CLI_GRPC_WEB=false
+ARGOCD_CLI_GRPC_WEB_ROOT_PATH=
+ARGOCD_PROJECT_ALLOWLIST=mobile-production
+ARGOCD_APPLICATION_ALLOWLIST=mobile-api,mobile-worker
+```
+
+Run the authentication helper from an interactive Windows session:
+
+```powershell
+.\scripts\Initialize-ItOpsAuth.ps1
+```
+
+It runs `argocd login ... --sso` and opens the Microsoft browser flow. The normal Argo CD authentication context stays in the current Windows user's CLI config—not in `itops.env`—and the MCP process captures the derived session token in memory when it starts. Protect the user's CLI config with normal Windows profile permissions. If your ingress requires gRPC-Web, set `ARGOCD_CLI_GRPC_WEB=true` and, when applicable, its root path.
+
+A dedicated read-only token is an alternative:
+
+```dotenv
+ARGOCD_AUTH_MODE=token
+ARGOCD_TOKEN=REPLACE_ME
+```
+
+Use one authentication mode, not both. The project and application allowlists are mandatory defense-in-depth and should contain only the mobile application resources that the agent may inspect.
+
+### Bitbucket Cloud
+
+Create a dedicated repository/workspace API or access token with repository read, pull-request read, and pipeline read permissions only. The provider may bundle extra permissions with a read scope, but the harness exposes no comment, merge, pipeline-run, or write tool.
+
+```dotenv
+ITOPS_ENABLE_SOURCE_CODE=true
+ITOPS_ENABLE_BITBUCKET=true
+BITBUCKET_BASE_URL=https://api.bitbucket.org
+BITBUCKET_AUTH_MODE=bearer
+BITBUCKET_API_TOKEN=REPLACE_ME
+BITBUCKET_REPOSITORY_ALLOWLIST=mobile/mobile-api,mobile/mobile-app
+BITBUCKET_HEALTH_REPOSITORY=mobile/mobile-api
+```
+
+Each allowlist entry is `workspace/repository`. `BITBUCKET_HEALTH_REPOSITORY` must be one accessible allowlisted repository. For a user API token, follow Bitbucket's [API authentication instructions](https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/) and use Basic authentication with the Atlassian account email:
+
+```dotenv
+BITBUCKET_AUTH_MODE=basic
+BITBUCKET_EMAIL=itops-reader@example.com
+BITBUCKET_API_TOKEN=REPLACE_ME
+```
+
+Confirm the exact permissions against Bitbucket's [API-token permissions](https://support.atlassian.com/bitbucket-cloud/docs/api-token-permissions/). Do not use an app password or token that can administer repositories, merge pull requests, or run pipelines.
+
+### GitLab
+
+Prefer a project or group access token over a personal token. Give it the lowest role that can read the required projects—normally Reporter—and only `read_api` and `read_repository`; do not grant the broad `api` scope.
+
+```dotenv
+ITOPS_ENABLE_SOURCE_CODE=true
+ITOPS_ENABLE_GITLAB=true
+GITLAB_BASE_URL=https://gitlab.example.com
+GITLAB_AUTH_MODE=private-token
+GITLAB_TOKEN=REPLACE_ME
+GITLAB_PROJECT_ALLOWLIST=mobile/mobile-api,mobile/mobile-app
+GITLAB_HEALTH_PROJECT=mobile/mobile-api
+```
+
+Each project entry uses its full namespace path. `GITLAB_HEALTH_PROJECT` must be accessible and allowlisted. `private-token` sends GitLab's `PRIVATE-TOKEN` header; an OAuth access token can instead use `GITLAB_AUTH_MODE=bearer`. Review GitLab's [REST authentication](https://docs.gitlab.com/api/rest/authentication/) and [token scopes](https://docs.gitlab.com/security/tokens/access_token_scopes/).
+
+If only one source-code provider is used, leave `ITOPS_ENABLE_SOURCE_CODE=true` and disable the unused provider with `ITOPS_ENABLE_BITBUCKET=false` or `ITOPS_ENABLE_GITLAB=false`.
+
+### Private wiki
+
+The wiki does not need a credential or remote connection. Copy the private Markdown tree under `wiki\`:
+
+```powershell
+Copy-Item -Recurse C:\path\to\your\wiki\* .\wiki\
+```
+
+The folder contents are ignored by Git. Restart the harness after a large initial copy so Kiro indexes the complete knowledge base. Keep credentials and secret values out of wiki pages because retrieved text can be included in the agent's working context.
+
+### Authenticate, verify, and troubleshoot
+
+After all enabled integrations are configured:
+
+```powershell
+.\scripts\Initialize-ItOpsAuth.ps1
+.\scripts\Test-ItOps.ps1
+.\scripts\Start-ItOps.ps1
+```
+
+For configuration-only validation before the PC has network access:
+
+```powershell
+.\scripts\Test-ItOps.ps1 -SkipConnections
+```
+
+The full test checks local configuration, dependencies, TLS/security invariants, the SQL ODBC driver, Argo CD authentication, and a read-only health operation for each enabled local MCP server. Dynatrace remains `DEFER` until Kiro performs OAuth. When a check fails:
+
+1. verify DNS, VPN/firewall access, proxy rules, system time, and the enterprise CA
+2. verify the base URL and exact database/repository/project allowlist entry
+3. treat `401` as an authentication/token problem and `403` as a role/scope/access problem
+4. disable integrations that are intentionally not available instead of inserting dummy credentials
+5. rerun `Test-ItOps.ps1`; do not bypass TLS or expand permissions just to obtain a successful health check
+
+Once Kiro starts, talk only to `itops-orchestrator`. Ask it a narrow question for each enabled source—for example, to identify an allowlisted Argo CD application or GitLab commit—before relying on a full incident investigation.
+
 ## Validate and start
 
 ```powershell
