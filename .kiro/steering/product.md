@@ -6,8 +6,9 @@ Fill company-specific product, user-journey, ownership, severity, and SLO detail
 
 Primary outcomes:
 
+- answer ordinary operational questions directly in Kiro chat
 - establish what users experienced and when
-- correlate runtime, deployment, and data evidence
+- correlate runtime, deployment, source-change, CI, and data evidence
 - identify a defensible root-cause status
-- produce a detailed Hebrew report
+- produce a detailed Hebrew report only for an explicit report request or full investigation
 - recommend next actions without executing changes

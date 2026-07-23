@@ -27,5 +27,8 @@ ORDER BY created_at DESC
 - Check data types before comparing timestamps or IDs.
 - Use a count before sampling rows.
 - Do not use `NOLOCK`; it can produce missing, duplicate, or inconsistent evidence.
-- Read-only routing is a connection intent, not a substitute for a `SELECT`-only login.
+- Read-only routing is a connection intent, not proof by itself. The MCP must also observe HADR enabled, `sys.fn_hadr_is_primary_replica(DB_NAME()) = 0`, the exact configured database, and `sys.databases.is_read_only = 1`.
+- Windows mode uses the Windows identity running Kiro through ODBC Driver 18; never put a Windows password in the environment file.
+- Refuse access when the proof query lacks `VIEW SERVER STATE`, routes to a primary, lands on another database, or changes after failover.
+- Replica proof is not a substitute for a `SELECT`-only database identity.
 - Ask the database team for replica lag evidence if absence is material.

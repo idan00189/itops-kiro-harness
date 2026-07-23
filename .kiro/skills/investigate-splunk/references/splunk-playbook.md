@@ -2,6 +2,8 @@
 
 Use field names from the environment; these are patterns, not assumptions.
 
+Before searching in Kerberos mode, confirm the health tool succeeds through the configured HTTPS Negotiate endpoint. A reverse proxy may perform Kerberos authentication before forwarding the authorized identity to Splunk. Never assume a direct Splunk management endpoint supports Kerberos.
+
 ## Rate and baseline
 
 ```spl

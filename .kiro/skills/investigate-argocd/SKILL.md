@@ -7,6 +7,8 @@ description: Investigate incidents in Argo CD with read-only application, health
 
 Read [argocd-playbook.md](references/argocd-playbook.md) before interpreting health, sync, or drift.
 
+CLI SSO mode reuses the current Argo CD context and a Microsoft/Entra-backed session. The local MCP obtains only a refreshable session token and uses it for fixed read-only REST calls. If the session or read RBAC is unavailable, return an evidence gap; never use a broader context or ask for an administrator token.
+
 ## Establish deployment state
 
 1. Identify the allowlisted project and application.

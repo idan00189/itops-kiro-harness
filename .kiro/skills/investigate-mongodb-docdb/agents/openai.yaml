@@ -1,4 +1,4 @@
 interface:
   display_name: "Investigate MongoDB and DocumentDB"
   short_description: "Inspect document data with read-only queries"
-  default_prompt: "Investigate this incident in MongoDB or DocumentDB using bounded read-only operations."
+  default_prompt: "Use $investigate-mongodb-docdb to inspect this incident with bounded read-only document queries."

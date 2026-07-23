@@ -1,4 +1,4 @@
 interface:
   display_name: "Investigate Dynatrace"
-  short_description: "Correlate Dynatrace problems metrics and DQL evidence"
-  default_prompt: "Investigate this incident in Dynatrace with read-only problem metric entity and DQL queries."
+  short_description: "Investigate observability through Dynatrace MCP"
+  default_prompt: "Use $investigate-dynatrace to examine this incident through the official read-only Dynatrace MCP."

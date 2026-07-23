@@ -1,4 +1,4 @@
 interface:
-  display_name: "ITOps Orchestrator"
-  short_description: "Coordinate read-only mobile incident investigations"
-  default_prompt: "Investigate this mobile-app incident across the configured systems and produce a Hebrew Markdown report."
+  display_name: "ITOps Full Investigation"
+  short_description: "Run full read-only incident investigations"
+  default_prompt: "Use $itops-orchestrate to perform a full cross-system investigation and write the Hebrew Markdown report."

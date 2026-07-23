@@ -1,6 +1,10 @@
-# Hebrew reporting policy
+# Chat and Hebrew reporting policy
 
-The default deliverable is a Hebrew Markdown incident report. HTML is optional and must use `lang="he"` and `dir="rtl"`.
+The default interaction is a direct answer in Kiro chat, in the operator's language. Routine questions, explanations, wiki/runbook lookups, status questions, and targeted checks do not create files.
+
+Create an incident report only when the operator explicitly requests a report or requests a full/end-to-end investigation, formal RCA, postmortem, or clearly comprehensive multi-system incident analysis. Never create a report merely because one or more specialists were used.
+
+When a report is required, Hebrew Markdown is the default. HTML is optional and must use `lang="he"` and `dir="rtl"`.
 
 Every report includes:
 

@@ -1,17 +1,22 @@
 # ITOps harness implementation tasks
 
 - [x] Research current Kiro CLI v3 agents, permissions, hooks, skills, subagents, MCP, steering, knowledge, and specs.
-- [x] Define the six-agent architecture and two-wave investigation workflow.
+- [x] Define the seven-agent architecture and two-wave investigation workflow.
 - [x] Implement shared environment, HTTPS, redaction, bounds, audit, and query-guard modules.
 - [x] Implement the core Jira/Confluence and Hebrew report MCP server.
 - [x] Implement the Splunk search and offline Simple XML MCP server.
-- [x] Implement the SQL Server replica MCP server with read-only intent and query guard.
+- [x] Implement the SQL Server replica MCP server with Windows integrated/SQL authentication, read-only intent, exact-database proof, and per-query secondary guard.
 - [x] Implement the MongoDB/DocumentDB MCP server with read-only stage allowlists.
-- [x] Implement the Dynatrace Environment API and Grail DQL MCP server.
-- [x] Implement the Argo CD read-only MCP server.
-- [x] Create six Kiro v3 agent profiles and six Agent Skills.
+- [x] Configure the official remote Dynatrace MCP with Kiro-managed confidential OAuth and read-only Grail scopes.
+- [x] Implement the Argo CD read-only MCP server with CLI Microsoft/Entra SSO and token fallback.
+- [x] Implement the Bitbucket/GitLab read-only source investigation MCP server.
+- [x] Create seven Kiro v3 agent profiles and seven Agent Skills.
+- [x] Make the orchestrator the sole user-facing agent and allow/trust only the six custom specialists.
+- [x] Add direct-chat default behavior and gate report creation to explicit/full investigations.
+- [x] Add private Karpathy-style wiki indexing, provenance policy, and Git-leak protection.
 - [x] Add v3 hooks, steering, AGENTS.md, and the empty wiki folder.
 - [x] Add one environment template and Windows PowerShell workflows.
+- [x] Add Splunk Windows Kerberos/SPNEGO, Argo CD SSO initialization, and authentication-mode validation.
 - [x] Install pinned dependencies and produce the lockfile.
 - [x] Run compilation, tests, structural validation, and secret scan.
 - [ ] Run live connection health checks after the operator supplies credentials.

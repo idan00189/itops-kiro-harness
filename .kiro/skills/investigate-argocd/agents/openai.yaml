@@ -1,4 +1,4 @@
 interface:
   display_name: "Investigate Argo CD"
   short_description: "Inspect GitOps application health and drift safely"
-  default_prompt: "Investigate this incident in Argo CD using read-only application and resource evidence."
+  default_prompt: "Use $investigate-argocd to inspect this incident through read-only application and resource evidence."

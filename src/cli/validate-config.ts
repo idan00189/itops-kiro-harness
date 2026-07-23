@@ -6,13 +6,30 @@ import {
   enabled,
   env,
   envBoolean,
+  envChoice,
+  envCsv,
+  envInteger,
+  requireLoopbackUrl,
   requireSafeBaseUrl,
 } from "../common/env.js";
+import { configuredExecutable } from "../common/process.js";
+import {
+  assertBitbucketRepository,
+  assertGitLabProject,
+} from "../common/source-guards.js";
 
 const root = process.cwd();
 const runtime = process.argv.includes("--runtime");
 const errors: string[] = [];
 const warnings: string[] = [];
+const specialistAgents = [
+  "itops-splunk",
+  "itops-sql-server",
+  "itops-mongodb-docdb",
+  "itops-dynatrace",
+  "itops-argocd",
+  "itops-source-code",
+];
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -41,11 +58,7 @@ async function validateAgents(): Promise<void> {
   const directory = resolve(root, ".kiro/agents");
   const expected = new Set([
     "itops-orchestrator.md",
-    "itops-splunk.md",
-    "itops-sql-server.md",
-    "itops-mongodb-docdb.md",
-    "itops-dynatrace.md",
-    "itops-argocd.md",
+    ...specialistAgents.map((name) => `${name}.md`),
   ]);
   const files = (await readdir(directory)).filter((file) => file.endsWith(".md"));
   check(files.length === expected.size, `Expected ${expected.size} agent profiles, found ${files.length}`);
@@ -53,7 +66,8 @@ async function validateAgents(): Promise<void> {
 
   for (const file of files) {
     try {
-      const config = frontmatter(await readFile(join(directory, file), "utf8"));
+      const profile = await readFile(join(directory, file), "utf8");
+      const config = frontmatter(profile);
       const tools = Array.isArray(config.tools) ? config.tools.map(String) : [];
       check(tools.includes("@mcp"), `${file}: tools must include @mcp`);
       check(config.includeMcpJson === false, `${file}: includeMcpJson must be false`);
@@ -63,11 +77,92 @@ async function validateAgents(): Promise<void> {
         file === "itops-orchestrator.md" ? tools.includes("subagent") : !tools.includes("subagent"),
         `${file}: invalid subagent capability`,
       );
+      if (file === "itops-orchestrator.md") {
+        const toolSettings = config.toolsSettings as
+          | {
+              subagent?: {
+                availableAgents?: unknown[];
+                trustedAgents?: unknown[];
+              };
+            }
+          | undefined;
+        const available = (toolSettings?.subagent?.availableAgents ?? []).map(String);
+        const trusted = (toolSettings?.subagent?.trustedAgents ?? []).map(String);
+        check(
+          available.length === specialistAgents.length &&
+            specialistAgents.every((name) => available.includes(name)),
+          `${file}: availableAgents must contain only the six ITOps specialists`,
+        );
+        check(
+          trusted.length === specialistAgents.length &&
+            specialistAgents.every((name) => trusted.includes(name)),
+          `${file}: trustedAgents must contain only the six read-only ITOps specialists`,
+        );
+        const resources = Array.isArray(config.resources) ? config.resources : [];
+        const wikiKnowledgeBase = resources.find(
+          (resource) =>
+            resource &&
+            typeof resource === "object" &&
+            !Array.isArray(resource) &&
+            (resource as Record<string, unknown>).type === "knowledgeBase" &&
+            (resource as Record<string, unknown>).name === "ITOpsWiki",
+        ) as Record<string, unknown> | undefined;
+        check(wikiKnowledgeBase?.source === "file://wiki", `${file}: missing ITOpsWiki source`);
+        check(wikiKnowledgeBase?.indexType === "best", `${file}: ITOpsWiki must use best indexing`);
+        check(wikiKnowledgeBase?.autoUpdate === true, `${file}: ITOpsWiki must auto-update`);
+        check(
+          !resources.some(
+            (resource) => typeof resource === "string" && resource.includes("wiki/**/*.md"),
+          ),
+          `${file}: wiki must be indexed, not injected eagerly`,
+        );
+        check(
+          profile.includes("Default mode: direct chat answer."),
+          `${file}: direct chat must be the default operating mode`,
+        );
+        check(
+          profile.includes("Do not call `report_write`"),
+          `${file}: missing report-write prohibition for direct chat`,
+        );
+        check(
+          profile.includes("Full investigation/report mode."),
+          `${file}: missing explicit report-mode entry conditions`,
+        );
+      } else {
+        check(
+          profile.includes("internal, non-user-facing"),
+          `${file}: specialist must identify itself as an internal subagent`,
+        );
+      }
       const servers =
         config.mcpServers && typeof config.mcpServers === "object"
           ? Object.keys(config.mcpServers as Record<string, unknown>)
           : [];
       check(servers.length === 1, `${file}: must declare exactly one MCP server`);
+      if (file === "itops-dynatrace.md") {
+        const dynatraceServer = (
+          config.mcpServers as Record<string, Record<string, unknown>>
+        )["dynatrace-platform"];
+        const oauth = dynatraceServer?.oauth as
+          | { clientId?: unknown; clientSecret?: unknown; redirectUri?: unknown; oauthScopes?: unknown[] }
+          | undefined;
+        check(dynatraceServer?.type === "http", `${file}: Dynatrace must use remote HTTP MCP`);
+        check(
+          dynatraceServer?.url === "${DYNATRACE_MCP_URL}",
+          `${file}: Dynatrace MCP URL must come from the environment`,
+        );
+        check(
+          oauth?.clientId === "${DYNATRACE_OAUTH_CLIENT_ID}" &&
+            oauth?.clientSecret === "${DYNATRACE_OAUTH_CLIENT_SECRET}" &&
+            oauth?.redirectUri === "${DYNATRACE_OAUTH_REDIRECT_URI}",
+          `${file}: Dynatrace OAuth values must come from the environment`,
+        );
+        const scopes = (oauth?.oauthScopes ?? []).map(String);
+        check(
+          scopes.length > 0 && !scopes.some((scope) => /(?:write|delete|manage|admin)/i.test(scope)),
+          `${file}: Dynatrace OAuth scopes must be read-only`,
+        );
+      }
       const permissions = config.permissions as { rules?: Array<Record<string, unknown>> } | undefined;
       const rules = permissions?.rules ?? [];
       check(
@@ -107,6 +202,7 @@ async function validateSkills(): Promise<void> {
     "investigate-mongodb-docdb",
     "investigate-dynatrace",
     "investigate-argocd",
+    "investigate-source-code",
   ]);
   const directories = (await readdir(directory, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
@@ -121,6 +217,35 @@ async function validateSkills(): Promise<void> {
         Object.keys(config).every((key) => ["name", "description"].includes(key)),
         `${name}: unsupported SKILL.md frontmatter field`,
       );
+      const interfaceConfig = parse(
+        await readFile(join(directory, name, "agents", "openai.yaml"), "utf8"),
+      ) as {
+        interface?: {
+          display_name?: string;
+          short_description?: string;
+          default_prompt?: string;
+        };
+      };
+      check(
+        Boolean(interfaceConfig.interface?.display_name),
+        `${name}: openai.yaml must declare a display name`,
+      );
+      check(
+        (interfaceConfig.interface?.short_description?.length ?? 0) >= 25 &&
+          (interfaceConfig.interface?.short_description?.length ?? 0) <= 64,
+        `${name}: openai.yaml short description must be 25-64 characters`,
+      );
+      check(
+        interfaceConfig.interface?.default_prompt?.includes(`$${name}`),
+        `${name}: openai.yaml default prompt must mention $${name}`,
+      );
+      if (name === "itops-orchestrate") {
+        const description = String(config.description);
+        check(
+          description.includes("Use only") && description.includes("do not use for routine"),
+          `${name}: full-investigation skill must not trigger for routine chat`,
+        );
+      }
     } catch (error) {
       errors.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -172,10 +297,13 @@ async function validateLayout(): Promise<void> {
     "AGENTS.md",
     "README.md",
     "config/itops.env.example",
+    "docs/AUTHENTICATION.md",
+    "scripts/Initialize-ItOpsAuth.ps1",
     "wiki/.gitkeep",
     ".kiro/steering/product.md",
     ".kiro/steering/tech.md",
     ".kiro/steering/structure.md",
+    ".kiro/steering/wiki-policy.md",
     ".kiro/specs/itops-harness/requirements.md",
     ".kiro/specs/itops-harness/design.md",
     ".kiro/specs/itops-harness/tasks.md",
@@ -183,14 +311,27 @@ async function validateLayout(): Promise<void> {
     "dist/mcp/splunk.js",
     "dist/mcp/sql-server.js",
     "dist/mcp/mongodb-docdb.js",
-    "dist/mcp/dynatrace.js",
     "dist/mcp/argocd.js",
+    "dist/mcp/source-code.js",
+    ".kiro/skills/itops-orchestrate/references/wiki-evidence.md",
   ];
   for (const path of required) check(await exists(resolve(root, path)), `Missing required path ${path}`);
   const envFiles = (await readdir(resolve(root, "config"))).filter((file) => /\.env(?:\.example)?$/i.test(file));
   check(
     envFiles.every((file) => ["itops.env", "itops.env.example"].includes(file)),
     `Unexpected environment file(s): ${envFiles.join(", ")}`,
+  );
+  const gitignore = await readFile(resolve(root, ".gitignore"), "utf8");
+  check(gitignore.includes("wiki/*"), "Private wiki contents must be ignored by Git");
+  check(gitignore.includes("!wiki/.gitkeep"), "wiki/.gitkeep must remain tracked");
+  const reporting = await readFile(resolve(root, ".kiro/steering/reporting.md"), "utf8");
+  check(
+    reporting.includes("The default interaction is a direct answer in Kiro chat"),
+    "Reporting policy must default to direct chat",
+  );
+  check(
+    reporting.includes("Never create a report merely because one or more specialists were used"),
+    "Reporting policy must gate report creation independently of delegation",
   );
 }
 
@@ -221,16 +362,35 @@ function validateRuntime(): void {
       safeUrl("ATLASSIAN_BASE_URL");
     }
     if (enabled("SPLUNK")) {
-      requireVariables(["SPLUNK_BASE_URL", "SPLUNK_TOKEN"]);
+      requireVariables(["SPLUNK_BASE_URL"]);
       safeUrl("SPLUNK_BASE_URL");
+      const mode = envChoice("SPLUNK_AUTH_MODE", ["kerberos", "token"] as const, "kerberos");
+      if (mode === "kerberos") {
+        try {
+          configuredExecutable("SPLUNK_CURL_PATH", "curl.exe", ["curl", "curl.exe"]);
+        } catch (error) {
+          errors.push(error instanceof Error ? error.message : String(error));
+        }
+        try {
+          if (requireSafeBaseUrl("SPLUNK_BASE_URL").protocol !== "https:") {
+            errors.push("SPLUNK_AUTH_MODE=kerberos requires an HTTPS endpoint");
+          }
+        } catch {
+          // safeUrl already recorded the actionable URL error.
+        }
+      } else {
+        requireVariables(["SPLUNK_TOKEN"]);
+        envChoice("SPLUNK_AUTH_SCHEME", ["bearer", "splunk"] as const, "bearer");
+      }
     }
     if (enabled("SQLSERVER")) {
-      requireVariables([
-        "SQLSERVER_HOST",
-        "SQLSERVER_DATABASE",
-        "SQLSERVER_USERNAME",
-        "SQLSERVER_PASSWORD",
-      ]);
+      requireVariables(["SQLSERVER_HOST", "SQLSERVER_DATABASE"]);
+      const mode = envChoice("SQLSERVER_AUTH_MODE", ["windows", "sql"] as const, "windows");
+      if (mode === "windows") {
+        requireVariables(["SQLSERVER_ODBC_DRIVER"]);
+      } else {
+        requireVariables(["SQLSERVER_USERNAME", "SQLSERVER_PASSWORD"]);
+      }
       if (!envBoolean("SQLSERVER_ENCRYPT", true)) errors.push("SQLSERVER_ENCRYPT must remain true");
       if (envBoolean("SQLSERVER_TRUST_SERVER_CERTIFICATE", false)) {
         errors.push("SQLSERVER_TRUST_SERVER_CERTIFICATE must remain false; install the issuing CA instead");
@@ -247,33 +407,132 @@ function validateRuntime(): void {
       }
     }
     if (enabled("DYNATRACE")) {
-      requireVariables(["DYNATRACE_ENV_URL", "DYNATRACE_API_TOKEN"]);
-      safeUrl("DYNATRACE_ENV_URL");
-      if (envBoolean("DYNATRACE_DQL_ENABLED", true)) {
-        requireVariables(["DYNATRACE_PLATFORM_URL"]);
-        safeUrl("DYNATRACE_PLATFORM_URL");
-        if (!env("DYNATRACE_PLATFORM_TOKEN")) {
-          requireVariables([
-            "DYNATRACE_OAUTH_TOKEN_URL",
-            "DYNATRACE_OAUTH_CLIENT_ID",
-            "DYNATRACE_OAUTH_CLIENT_SECRET",
-            "DYNATRACE_OAUTH_SCOPES",
-          ]);
-          safeUrl("DYNATRACE_OAUTH_TOKEN_URL");
+      requireVariables([
+        "DYNATRACE_MCP_URL",
+        "DYNATRACE_OAUTH_CLIENT_ID",
+        "DYNATRACE_OAUTH_CLIENT_SECRET",
+        "DYNATRACE_OAUTH_REDIRECT_URI",
+      ]);
+      safeUrl("DYNATRACE_MCP_URL");
+      try {
+        const mcpUrl = requireSafeBaseUrl("DYNATRACE_MCP_URL");
+        if (!mcpUrl.pathname.endsWith("/platform-reserved/mcp-gateway/v0.1/servers/dynatrace-mcp/mcp")) {
+          errors.push("DYNATRACE_MCP_URL must target the official Dynatrace MCP gateway path");
         }
-        if (/(?:write|delete|manage|admin)/i.test(env("DYNATRACE_OAUTH_SCOPES"))) {
-          errors.push("DYNATRACE_OAUTH_SCOPES contains a non-read scope");
-        }
+        requireLoopbackUrl("DYNATRACE_OAUTH_REDIRECT_URI");
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error));
       }
     }
     if (enabled("ARGOCD")) {
-      requireVariables(["ARGOCD_BASE_URL", "ARGOCD_TOKEN"]);
+      requireVariables(["ARGOCD_BASE_URL"]);
       safeUrl("ARGOCD_BASE_URL");
+      const mode = envChoice("ARGOCD_AUTH_MODE", ["cli-sso", "token"] as const, "cli-sso");
+      if (mode === "cli-sso") {
+        requireVariables(["ARGOCD_CLI_CONTEXT", "ARGOCD_CLI_SERVER"]);
+        try {
+          configuredExecutable("ARGOCD_CLI_PATH", "argocd.exe", ["argocd", "argocd.exe"]);
+          const base = requireSafeBaseUrl("ARGOCD_BASE_URL");
+          const serverValue = env("ARGOCD_CLI_SERVER", { required: true });
+          const cliServer = new URL(
+            serverValue.includes("://") ? serverValue : `https://${serverValue}`,
+          );
+          if (
+            cliServer.protocol !== "https:" ||
+            cliServer.username ||
+            cliServer.password ||
+            cliServer.search ||
+            cliServer.hash
+          ) {
+            errors.push("ARGOCD_CLI_SERVER must be an HTTPS server without credentials, query, or fragment");
+          }
+          if (cliServer.host.toLowerCase() !== base.host.toLowerCase()) {
+            errors.push("ARGOCD_CLI_SERVER must match the ARGOCD_BASE_URL host and port");
+          }
+        } catch (error) {
+          errors.push(error instanceof Error ? error.message : String(error));
+        }
+      } else {
+        requireVariables(["ARGOCD_TOKEN"]);
+      }
       if (env("ARGOCD_PROJECT_ALLOWLIST", { defaultValue: "*", allowPlaceholder: true }) === "*") {
         warnings.push("ARGOCD_PROJECT_ALLOWLIST=*; narrow it when possible");
       }
       if (env("ARGOCD_APPLICATION_ALLOWLIST", { defaultValue: "*", allowPlaceholder: true }) === "*") {
         warnings.push("ARGOCD_APPLICATION_ALLOWLIST=*; narrow it when possible");
+      }
+    }
+    if (enabled("SOURCE_CODE")) {
+      const bitbucketEnabled = enabled("BITBUCKET");
+      const gitlabEnabled = enabled("GITLAB");
+      if (!bitbucketEnabled && !gitlabEnabled) {
+        errors.push("ITOPS_ENABLE_SOURCE_CODE=true requires Bitbucket and/or GitLab");
+      }
+      const sourceMax = envInteger("SOURCE_CODE_MAX_FILE_BYTES", 250_000, 1_000, 2_000_000);
+      const httpMax = envInteger(
+        "ITOPS_MAX_HTTP_RESPONSE_BYTES",
+        5_000_000,
+        10_000,
+        50_000_000,
+      );
+      if (sourceMax > httpMax) {
+        errors.push("SOURCE_CODE_MAX_FILE_BYTES must not exceed ITOPS_MAX_HTTP_RESPONSE_BYTES");
+      }
+      if (bitbucketEnabled) {
+        requireVariables([
+          "BITBUCKET_BASE_URL",
+          "BITBUCKET_API_TOKEN",
+          "BITBUCKET_REPOSITORY_ALLOWLIST",
+          "BITBUCKET_HEALTH_REPOSITORY",
+        ]);
+        safeUrl("BITBUCKET_BASE_URL");
+        const mode = env("BITBUCKET_AUTH_MODE", {
+          defaultValue: "bearer",
+          allowPlaceholder: true,
+        }).toLowerCase();
+        if (!["bearer", "basic"].includes(mode)) {
+          errors.push("BITBUCKET_AUTH_MODE must be bearer or basic");
+        }
+        if (mode === "basic") requireVariables(["BITBUCKET_EMAIL"]);
+        const allowlist = envCsv("BITBUCKET_REPOSITORY_ALLOWLIST");
+        if (allowlist.includes("*")) {
+          warnings.push("BITBUCKET_REPOSITORY_ALLOWLIST=*; narrow it for least privilege");
+        }
+        const healthParts = env("BITBUCKET_HEALTH_REPOSITORY", { required: true }).split("/");
+        if (healthParts.length !== 2 || !healthParts[0] || !healthParts[1]) {
+          errors.push("BITBUCKET_HEALTH_REPOSITORY must be workspace/repository");
+        } else {
+          try {
+            assertBitbucketRepository(healthParts[0], healthParts[1], allowlist);
+          } catch (error) {
+            errors.push(error instanceof Error ? error.message : String(error));
+          }
+        }
+      }
+      if (gitlabEnabled) {
+        requireVariables([
+          "GITLAB_BASE_URL",
+          "GITLAB_TOKEN",
+          "GITLAB_PROJECT_ALLOWLIST",
+          "GITLAB_HEALTH_PROJECT",
+        ]);
+        safeUrl("GITLAB_BASE_URL");
+        const mode = env("GITLAB_AUTH_MODE", {
+          defaultValue: "private-token",
+          allowPlaceholder: true,
+        }).toLowerCase();
+        if (!["private-token", "bearer"].includes(mode)) {
+          errors.push("GITLAB_AUTH_MODE must be private-token or bearer");
+        }
+        const allowlist = envCsv("GITLAB_PROJECT_ALLOWLIST");
+        if (allowlist.includes("*")) {
+          warnings.push("GITLAB_PROJECT_ALLOWLIST=*; narrow it for least privilege");
+        }
+        try {
+          assertGitLabProject(env("GITLAB_HEALTH_PROJECT", { required: true }), allowlist);
+        } catch (error) {
+          errors.push(error instanceof Error ? error.message : String(error));
+        }
       }
     }
   } catch (error) {

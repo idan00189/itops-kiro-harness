@@ -1,14 +1,21 @@
 import { z } from "zod";
 import { assertReadOnlySpl } from "../common/guards.js";
-import { enabled, env, envInteger, requireSafeBaseUrl } from "../common/env.js";
+import {
+  enabled,
+  env,
+  envChoice,
+  envInteger,
+  requireSafeBaseUrl,
+} from "../common/env.js";
 import { bearer, fetchJson, fetchText, withQuery } from "../common/http.js";
 import { createServer, readOnlyAnnotations, runTool, startServer } from "../common/mcp.js";
+import { fetchNegotiateJson, fetchNegotiateText } from "../common/negotiate.js";
 import { generateDashboardXml } from "../splunk/dashboard.js";
 
 const SERVER = "itops-splunk";
 const server = createServer(
   SERVER,
-  "Bounded read-only Splunk searches and offline Simple XML dashboard generation. No saved-search, dashboard upload, lookup write, email, or delete tools exist.",
+  "Bounded read-only Splunk searches using Windows Kerberos/SPNEGO or a token, plus offline Simple XML dashboard generation. No saved-search, dashboard upload, lookup write, email, or delete tools exist.",
 );
 
 function assertEnabled(): void {
@@ -16,10 +23,59 @@ function assertEnabled(): void {
 }
 
 function authHeaders(): Record<string, string> {
+  const scheme = envChoice(
+    "SPLUNK_AUTH_SCHEME",
+    ["bearer", "splunk"] as const,
+    "bearer",
+  );
   return bearer(
     env("SPLUNK_TOKEN", { required: true }),
-    env("SPLUNK_AUTH_SCHEME", { defaultValue: "Bearer", allowPlaceholder: true }),
+    scheme === "splunk" ? "Splunk" : "Bearer",
   );
+}
+
+function authMode(): "kerberos" | "token" {
+  return envChoice("SPLUNK_AUTH_MODE", ["kerberos", "token"] as const, "kerberos");
+}
+
+async function splunkText(
+  path: string,
+  options: {
+    method?: "GET" | "POST";
+    headers?: Record<string, string>;
+    body?: string;
+    timeoutMs?: number;
+    retries?: number;
+  } = {},
+): Promise<string> {
+  const base = requireSafeBaseUrl("SPLUNK_BASE_URL");
+  if (authMode() === "kerberos") {
+    return fetchNegotiateText(base, path, options);
+  }
+  return fetchText(base, path, {
+    ...options,
+    headers: { ...authHeaders(), ...options.headers },
+  });
+}
+
+async function splunkJson<T>(
+  path: string,
+  options: {
+    method?: "GET" | "POST";
+    headers?: Record<string, string>;
+    body?: string;
+    timeoutMs?: number;
+    retries?: number;
+  } = {},
+): Promise<T> {
+  const base = requireSafeBaseUrl("SPLUNK_BASE_URL");
+  if (authMode() === "kerberos") {
+    return fetchNegotiateJson<T>(base, path, options);
+  }
+  return fetchJson<T>(base, path, {
+    ...options,
+    headers: { ...authHeaders(), ...options.headers },
+  });
 }
 
 function parseExport(text: string, limit: number): unknown[] {
@@ -75,8 +131,7 @@ server.registerTool(
         max_count: String(maxResults),
         adhoc_search_level: "fast",
       });
-      const result = await fetchText(
-        requireSafeBaseUrl("SPLUNK_BASE_URL"),
+      const result = await splunkText(
         env("SPLUNK_EXPORT_PATH", {
           defaultValue: "/services/search/v2/jobs/export",
           allowPlaceholder: true,
@@ -84,7 +139,6 @@ server.registerTool(
         {
           method: "POST",
           headers: {
-            ...authHeaders(),
             "Content-Type": "application/x-www-form-urlencoded",
           },
           body: body.toString(),
@@ -116,10 +170,8 @@ server.registerTool(
   async (input) =>
     runTool(SERVER, "splunk_list_indexes", input, async () => {
       assertEnabled();
-      return fetchJson(
-        requireSafeBaseUrl("SPLUNK_BASE_URL"),
+      return splunkJson(
         withQuery("/services/data/indexes", { output_mode: "json", count: input.count }),
-        { headers: authHeaders() },
       );
     }),
 );
@@ -171,12 +223,10 @@ server.registerTool(
   async (input) =>
     runTool(SERVER, "splunk_health", input, async () => {
       if (!enabled("SPLUNK")) return { status: "disabled", integration: "splunk" };
-      const response = await fetchJson(
-        requireSafeBaseUrl("SPLUNK_BASE_URL"),
+      const response = await splunkJson(
         "/services/server/info?output_mode=json&count=1",
-        { headers: authHeaders() },
       );
-      return { status: "ok", response };
+      return { status: "ok", authentication: authMode(), response };
     }),
 );
 

@@ -13,7 +13,7 @@ type FetchOptions = {
 
 class NonRetryableHttpError extends Error {}
 
-function resolveUrl(base: URL, path: string): URL {
+export function resolveApiUrl(base: URL, path: string): URL {
   const resolved = new URL(path, `${base.toString().replace(/\/+$/, "")}/`);
   if (resolved.origin !== base.origin) {
     throw new Error("Cross-origin API path rejected");
@@ -22,7 +22,7 @@ function resolveUrl(base: URL, path: string): URL {
 }
 
 async function request(base: URL, path: string, options: FetchOptions): Promise<Response> {
-  const url = resolveUrl(base, path);
+  const url = resolveApiUrl(base, path);
   const timeoutMs =
     options.timeoutMs ?? envInteger("ITOPS_HTTP_TIMEOUT_MS", 30_000, 1_000, 300_000);
   const retries = options.retries ?? 2;
@@ -32,7 +32,7 @@ async function request(base: URL, path: string, options: FetchOptions): Promise<
         method: options.method ?? "GET",
         headers: {
           Accept: "application/json",
-          "User-Agent": "itops-kiro-harness/1.0.0",
+          "User-Agent": "itops-kiro-harness/1.2.0",
           ...options.headers,
         },
         ...(options.body === undefined ? {} : { body: options.body }),

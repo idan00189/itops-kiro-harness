@@ -13,6 +13,8 @@ Require a precise question, UTC interval, and identifiers from the orchestrator.
 
 ## Query safely
 
+The MCP connects with `ApplicationIntent=ReadOnly` and fails closed unless SQL Server proves the configured database is a read-only Availability Group secondary. It repeats that proof inside every investigation batch. Never bypass a replica-proof failure or substitute a primary/default database.
+
 Use `sql_query` with:
 
 - one `SELECT` or `WITH` statement
@@ -27,7 +29,7 @@ Never use DML, DDL, procedures, dynamic SQL, `SELECT INTO`, cross-database names
 
 ## Interpret replica evidence
 
-The client requests read-only routing, and the credential must have only `SELECT`. Still account for:
+The client requests read-only routing, proves the connected role, and the credential must still have only `SELECT` plus the minimum server-state visibility needed for that proof. Account for:
 
 - availability-group routing mistakes
 - replica lag or suspended data movement
@@ -43,6 +45,7 @@ Absence on a replica is not proof of absence at the primary.
 Return:
 
 - database and observation time
+- verified replica server, role, and proof time when available
 - exact parameterized SQL
 - parameter names, with sensitive values redacted
 - row count and truncation status

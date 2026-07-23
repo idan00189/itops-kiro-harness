@@ -19,6 +19,8 @@ Read [splunk-playbook.md](references/splunk-playbook.md) when choosing SPL patte
 
 Use `splunk_search`. Keep `maxResults` small for raw events. Prefer aggregated queries that return counts and rates. Mask or omit tokens, credentials, user identifiers, payload bodies, and device identifiers unless explicitly necessary and authorized.
 
+Kerberos mode uses the current Windows identity through SSPI/SPNEGO; it does not change Splunk authorization. Treat `401` as a ticket/SPN/Negotiate gap and `403` as an RBAC gap. Return the gap to the orchestrator instead of requesting a password, wider role, or alternate endpoint.
+
 ## Read-only SPL boundary
 
 Never use `collect`, `delete`, `dump`, `into`, `map`, `outputcsv`, `outputlookup`, `run`, `script`, `sendemail`, or any custom command with side effects. Do not call REST endpoints that save searches or dashboards.
