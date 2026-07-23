@@ -20,7 +20,7 @@ export const localWriteAnnotations = {
 
 export function createServer(name: string, instructions: string): McpServer {
   return new McpServer(
-    { name, version: "1.3.1" },
+    { name, version: "1.4.0" },
     {
       instructions,
       capabilities: { logging: {} },

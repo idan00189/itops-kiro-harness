@@ -1,0 +1,58 @@
+name: ITOps validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: itops-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install pinned dependencies
+        run: npm ci
+
+      - name: Build, test, and validate Kiro configuration
+        run: npm run verify
+
+      - name: Parse Windows PowerShell scripts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $allErrors = @()
+          Get-ChildItem -LiteralPath scripts -Filter *.ps1 | ForEach-Object {
+              $tokens = $null
+              $parseErrors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile(
+                  $_.FullName,
+                  [ref]$tokens,
+                  [ref]$parseErrors
+              ) | Out-Null
+              $allErrors += $parseErrors
+          }
+          if ($allErrors.Count -gt 0) {
+              $allErrors | Format-List
+              throw "PowerShell parsing failed with $($allErrors.Count) error(s)."
+          }
+          Write-Host "All PowerShell scripts parsed successfully."

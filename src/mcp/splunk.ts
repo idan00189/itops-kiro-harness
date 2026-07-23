@@ -5,7 +5,7 @@ import {
   env,
   envChoice,
   envInteger,
-  requireSafeBaseUrl,
+  requireSafeBaseUrlWithPort,
 } from "../common/env.js";
 import { bearer, fetchJson, fetchText, withQuery } from "../common/http.js";
 import { createServer, readOnlyAnnotations, runTool, startServer } from "../common/mcp.js";
@@ -42,6 +42,10 @@ function authMode(): "kerberos" | "token" {
   return envChoice("SPLUNK_AUTH_MODE", ["kerberos", "token"] as const, "kerberos");
 }
 
+function splunkBaseUrl(): URL {
+  return requireSafeBaseUrlWithPort("SPLUNK_BASE_URL", "SPLUNK_PORT");
+}
+
 async function splunkText(
   path: string,
   options: {
@@ -52,7 +56,7 @@ async function splunkText(
     retries?: number;
   } = {},
 ): Promise<string> {
-  const base = requireSafeBaseUrl("SPLUNK_BASE_URL");
+  const base = splunkBaseUrl();
   if (authMode() === "kerberos") {
     return fetchNegotiateText(base, path, options);
   }
@@ -72,7 +76,7 @@ async function splunkJson<T>(
     retries?: number;
   } = {},
 ): Promise<T> {
-  const base = requireSafeBaseUrl("SPLUNK_BASE_URL");
+  const base = splunkBaseUrl();
   if (authMode() === "kerberos") {
     return fetchNegotiateJson<T>(base, path, options);
   }

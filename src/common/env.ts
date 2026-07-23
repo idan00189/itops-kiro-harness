@@ -15,6 +15,11 @@ type EnvOptions = {
 };
 
 const PLACEHOLDER = /^(?:CHANGE_ME|REPLACE_ME|YOUR_|<.+>|\$\{.+\})/i;
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+function isLoopbackHostname(hostname: string): boolean {
+  return LOOPBACK_HOSTNAMES.has(hostname.toLowerCase());
+}
 
 export function env(name: string, options: EnvOptions = {}): string {
   const raw = process.env[name]?.trim();
@@ -78,7 +83,7 @@ export function requireSafeBaseUrl(name: string): URL {
   } catch {
     throw new ConfigError(`${name} must be an absolute URL`);
   }
-  const local = ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname);
+  const local = isLoopbackHostname(parsed.hostname);
   if (parsed.protocol !== "https:" && !(local && parsed.protocol === "http:")) {
     throw new ConfigError(`${name} must use HTTPS (HTTP is allowed only for localhost)`);
   }
@@ -92,9 +97,42 @@ export function requireSafeBaseUrl(name: string): URL {
   return parsed;
 }
 
+function explicitUrlPort(value: string): string {
+  const authority = value.match(/^[a-z][a-z\d+.-]*:\/\/([^/?#]+)/i)?.[1] ?? "";
+  if (authority.startsWith("[")) {
+    return authority.match(/^\[[^\]]+\]:(\d+)$/)?.[1] ?? "";
+  }
+  return authority.match(/:(\d+)$/)?.[1] ?? "";
+}
+
+export function requireSafeBaseUrlWithPort(
+  urlName: string,
+  portName: string,
+): URL {
+  const rawUrl = env(urlName, { required: true });
+  const parsed = requireSafeBaseUrl(urlName);
+  const rawPort = process.env[portName]?.trim();
+  if (!rawPort) return parsed;
+  if (!/^\d+$/.test(rawPort)) {
+    throw new ConfigError(`${portName} must be an integer between 1 and 65535`);
+  }
+  const port = Number(rawPort);
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new ConfigError(`${portName} must be an integer between 1 and 65535`);
+  }
+  const embeddedPort = explicitUrlPort(rawUrl);
+  if (embeddedPort && Number(embeddedPort) !== port) {
+    throw new ConfigError(
+      `${urlName} embeds port ${embeddedPort}, which conflicts with ${portName}=${port}`,
+    );
+  }
+  parsed.port = String(port);
+  return parsed;
+}
+
 export function requireLoopbackUrl(name: string): URL {
   const parsed = requireSafeBaseUrl(name);
-  if (!["localhost", "127.0.0.1", "::1"].includes(parsed.hostname)) {
+  if (!isLoopbackHostname(parsed.hostname)) {
     throw new ConfigError(`${name} must use a loopback host`);
   }
   return parsed;

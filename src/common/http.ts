@@ -32,7 +32,7 @@ async function request(base: URL, path: string, options: FetchOptions): Promise<
         method: options.method ?? "GET",
         headers: {
           Accept: "application/json",
-          "User-Agent": "itops-kiro-harness/1.3.1",
+          "User-Agent": "itops-kiro-harness/1.4.0",
           ...options.headers,
         },
         ...(options.body === undefined ? {} : { body: options.body }),

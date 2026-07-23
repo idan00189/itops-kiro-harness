@@ -22,7 +22,7 @@ Each agent has a portable Agent Skill and exactly one isolated inline MCP server
 
 - Windows 11 and PowerShell 7 recommended
 - Node.js 22.12 or newer on an even-numbered/LTS release (Node 24 LTS is recommended)
-- Kiro CLI with the v3 engine
+- Kiro CLI 2.12.0 or newer with the v3 engine (update to the current release before installation)
 - Microsoft ODBC Driver 18 for SQL Server
 - a current `argocd` CLI with `account session-token`
 - Windows `curl.exe` with SSPI and SPNEGO for Splunk Kerberos
@@ -34,9 +34,10 @@ Install Kiro CLI on Windows from an ordinary PowerShell terminal:
 ```powershell
 irm 'https://cli.kiro.dev/install.ps1' | iex
 kiro-cli login
+kiro-cli update --non-interactive
 ```
 
-Kiro CLI v3 is currently Early Access and must run in the terminal UI with `--v3`. The start script does this automatically.
+Kiro CLI v3 is currently Early Access and must run in the terminal UI with `--v3`. The start script explicitly supplies both `--v3` and `--tui`. The installer rejects releases older than 2.12.0 because the Dynatrace confidential-client OAuth configuration depends on expanded MCP OAuth support.
 
 ## Install
 
@@ -57,6 +58,8 @@ The installer:
 4. validates all seven skills and agent profiles
 5. creates the ignored `config\itops.env` from the single template
 6. adds the exact ITOps subagents and MCP tools to this Windows user's Kiro permission file
+
+Every push and pull request also runs the pinned build, all tests, structural Kiro validation, and native PowerShell parsing on GitHub-hosted Windows and Linux runners. Live vendor connections and Kiro login remain workstation-only checks because CI has no production credentials.
 
 Edit `config\itops.env`. Do not put real secrets in `config\itops.env.example`.
 
@@ -134,10 +137,13 @@ The Windows default uses the current signed-in user through `curl.exe`, SSPI, an
 ```dotenv
 ITOPS_ENABLE_SPLUNK=true
 SPLUNK_AUTH_MODE=kerberos
-SPLUNK_BASE_URL=https://splunk-rest.example.com:8089
+SPLUNK_BASE_URL=https://splunk-rest.example.com
+SPLUNK_PORT=8089
 SPLUNK_CURL_PATH=curl.exe
 SPLUNK_CURL_CA_BUNDLE=
 ```
+
+`SPLUNK_PORT` accepts an integer from `1` through `65535`, so management port `8089`, an enterprise reverse-proxy port such as `443`, or another approved port can be selected independently. Existing configurations that embed a port in `SPLUNK_BASE_URL` remain supported when `SPLUNK_PORT` is empty. If both forms are present, their values must agree or validation fails.
 
 Before enabling it, run:
 

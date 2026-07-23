@@ -14,6 +14,7 @@ import {
   envInteger,
   requireLoopbackUrl,
   requireSafeBaseUrl,
+  requireSafeBaseUrlWithPort,
 } from "../common/env.js";
 import { configuredExecutable } from "../common/process.js";
 import {
@@ -313,14 +314,21 @@ async function validateHooks(): Promise<void> {
     try {
       const document = JSON.parse(await readFile(join(directory, file), "utf8")) as {
         version?: string;
-        hooks?: Array<{ trigger?: string; action?: { type?: string; command?: string } }>;
+        hooks?: Array<{
+          name?: string;
+          trigger?: string;
+          matcher?: string;
+          timeout?: number;
+          enabled?: boolean;
+          action?: { type?: string; command?: string; prompt?: string };
+        }>;
       };
       check(document.version === "v1", `${file}: hook schema must be v1`);
       check(Array.isArray(document.hooks) && document.hooks.length > 0, `${file}: missing hooks`);
       for (const hook of document.hooks ?? []) {
+        check(Boolean(hook.name?.trim()), `${file}: hook name is required`);
         check(
           [
-            "AgentSpawn",
             "SessionStart",
             "Stop",
             "PreToolUse",
@@ -335,6 +343,32 @@ async function validateHooks(): Promise<void> {
           ].includes(hook.trigger ?? ""),
           `${file}: invalid v3 trigger ${hook.trigger}`,
         );
+        check(
+          hook.action?.type === "command" || hook.action?.type === "agent",
+          `${file}: hook action must be command or agent`,
+        );
+        if (hook.matcher !== undefined) {
+          try {
+            new RegExp(hook.matcher);
+          } catch {
+            errors.push(`${file}: invalid matcher regex ${hook.matcher}`);
+          }
+        }
+        if (hook.timeout !== undefined) {
+          check(
+            Number.isInteger(hook.timeout) && hook.timeout >= 0,
+            `${file}: timeout must be a non-negative integer in seconds`,
+          );
+        }
+        if (hook.enabled !== undefined) {
+          check(typeof hook.enabled === "boolean", `${file}: enabled must be boolean`);
+        }
+        if (hook.action?.type === "command") {
+          check(Boolean(hook.action.command?.trim()), `${file}: command action is missing command`);
+        }
+        if (hook.action?.type === "agent") {
+          check(Boolean(hook.action.prompt?.trim()), `${file}: agent action is missing prompt`);
+        }
         if (hook.action?.type === "command" && hook.action.command) {
           const commandFile = hook.action.command.split(/\s+/).at(-1);
           if (commandFile) check(await exists(resolve(root, commandFile)), `${file}: missing command ${commandFile}`);
@@ -353,7 +387,9 @@ async function validateLayout(): Promise<void> {
     "config/itops.env.example",
     "docs/INSTALLATION.md",
     "docs/AUTHENTICATION.md",
+    ".github/workflows/ci.yml",
     "scripts/Initialize-ItOpsAuth.ps1",
+    "scripts/Start-ItOps.ps1",
     "scripts/Set-ItOpsKiroPermissions.ps1",
     "scripts/hooks/session-policy.mjs",
     "wiki/.gitkeep",
@@ -390,6 +426,18 @@ async function validateLayout(): Promise<void> {
     reporting.includes("Never create a report merely because one or more specialists were used"),
     "Reporting policy must gate report creation independently of delegation",
   );
+  const startScript = await readFile(resolve(root, "scripts/Start-ItOps.ps1"), "utf8");
+  check(
+    startScript.includes(
+      "kiro-cli chat --v3 --tui --agent itops-orchestrator --require-mcp-startup",
+    ),
+    "Start script must force the v3 TUI, orchestrator agent, and MCP startup gate",
+  );
+  const installScript = await readFile(resolve(root, "scripts/Install-ItOps.ps1"), "utf8");
+  check(
+    installScript.includes('$minimumKiroVersion = [Version]"2.12.0"'),
+    "Installer must enforce the minimum Kiro version needed for remote MCP OAuth",
+  );
 }
 
 function requireVariables(names: string[]): void {
@@ -410,6 +458,14 @@ function safeUrl(name: string): void {
   }
 }
 
+function safeSplunkUrl(): void {
+  try {
+    requireSafeBaseUrlWithPort("SPLUNK_BASE_URL", "SPLUNK_PORT");
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error));
+  }
+}
+
 function validateRuntime(): void {
   try {
     if (enabled("ATLASSIAN")) {
@@ -420,7 +476,7 @@ function validateRuntime(): void {
     }
     if (enabled("SPLUNK")) {
       requireVariables(["SPLUNK_BASE_URL"]);
-      safeUrl("SPLUNK_BASE_URL");
+      safeSplunkUrl();
       const mode = envChoice("SPLUNK_AUTH_MODE", ["kerberos", "token"] as const, "kerberos");
       if (mode === "kerberos") {
         try {
@@ -429,7 +485,10 @@ function validateRuntime(): void {
           errors.push(error instanceof Error ? error.message : String(error));
         }
         try {
-          if (requireSafeBaseUrl("SPLUNK_BASE_URL").protocol !== "https:") {
+          if (
+            requireSafeBaseUrlWithPort("SPLUNK_BASE_URL", "SPLUNK_PORT").protocol !==
+            "https:"
+          ) {
             errors.push("SPLUNK_AUTH_MODE=kerberos requires an HTTPS endpoint");
           }
         } catch {
