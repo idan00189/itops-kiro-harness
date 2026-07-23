@@ -10,8 +10,8 @@ The harness uses the single ignored `config\itops.env` file to select authentica
 | Bitbucket Cloud | access/API token | token, optional email, repository allowlist | repository/workspace read identity |
 | GitLab | project/group token | token and project allowlist | `read_api` / `read_repository` identity |
 | Splunk | Windows Kerberos | Negotiate-enabled HTTPS URL | currently logged-in Windows user |
-| SQL Server | Windows integrated | AG listener and database name | currently logged-in Windows user |
-| MongoDB / DocumentDB | database credential | TLS URI, database, collection allowlist | database-scoped `read` user |
+| SQL Server | Windows integrated per named connection | AG listeners and exact database names | currently logged-in Windows user or a profile-specific read-only SQL login |
+| MongoDB / DocumentDB | credential per named URI | TLS URIs and database/collection allowlists | `read` user across the authorized application databases |
 | Argo CD | CLI SSO | server, context and allowlists | Microsoft/Entra user mapped through Argo CD RBAC |
 | Dynatrace | Kiro OAuth | MCP URL and confidential OAuth client | Microsoft/Entra user intersected with OAuth scopes |
 
@@ -42,13 +42,17 @@ Kerberos does not create authorization. The mapped Splunk role must still have o
 Set:
 
 ```text
-SQLSERVER_AUTH_MODE=windows
-SQLSERVER_HOST=your-ag-listener
-SQLSERVER_DATABASE=your-database
+SQLSERVER_CONNECTIONS=mobile,orders
 SQLSERVER_ODBC_DRIVER=ODBC Driver 18 for SQL Server
+SQLSERVER_MOBILE_AUTH_MODE=windows
+SQLSERVER_MOBILE_HOST=your-mobile-ag-listener
+SQLSERVER_MOBILE_DATABASE=MobileApp
+SQLSERVER_ORDERS_AUTH_MODE=windows
+SQLSERVER_ORDERS_HOST=your-orders-ag-listener
+SQLSERVER_ORDERS_DATABASE=Orders
 ```
 
-The Windows process identity is used through `msnodesqlv8` and Microsoft ODBC Driver 18. The generated connection string fixes:
+Connection names use lowercase letters, digits, and underscores. Each name creates an isolated pool, exact-database proof, and safe selector visible to the SQL specialist. The Windows process identity is used through `msnodesqlv8` and Microsoft ODBC Driver 18. Every generated connection string fixes:
 
 - `Trusted_Connection=Yes`
 - `Encrypt=Yes`
@@ -56,7 +60,7 @@ The Windows process identity is used through `msnodesqlv8` and Microsoft ODBC Dr
 - `ApplicationIntent=ReadOnly`
 - `MultiSubnetFailover=Yes` by default
 
-Replica state cannot be known before a network connection exists. The harness therefore connects with read-only intent and runs only a replica-proof query first. It requires all of the following:
+Replica state cannot be known before a network connection exists. The harness therefore connects each selected profile with read-only intent and runs only its replica-proof query first. It requires all of the following:
 
 - the requested database name is the connected database
 - Always On HADR is enabled
@@ -64,9 +68,15 @@ Replica state cannot be known before a network connection exists. The harness th
 - `sys.databases.is_read_only` is `1`
 - `DATABASEPROPERTYEX(..., 'Updateability')` is `READ_ONLY`
 
-If any value is absent, unknown, primary, writable, or belongs to another database, the pool is closed. The same guard runs in the exact SQL batch before every investigation query, protecting against routing or failover changes after startup.
+If any value is absent, unknown, primary, writable, or belongs to another database, only that profile's pool is closed. The same guard runs in the exact SQL batch before every investigation query, protecting each named connection against routing or failover changes after startup. When more than one profile exists, omission of the connection selector fails closed.
 
-The Windows identity needs `CONNECT` and narrowly scoped `SELECT` access plus `VIEW SERVER STATE` so the role can be proven. It does not need DML, DDL, `EXECUTE`, `ALTER`, or `CONTROL`.
+The Windows identity—or each profile-specific SQL login—needs `CONNECT` and narrowly scoped `SELECT` access plus `VIEW SERVER STATE` so the role can be proven. It does not need DML, DDL, `EXECUTE`, `ALTER`, or `CONTROL`.
+
+## MongoDB and DocumentDB named URI authentication
+
+Set `MONGODB_CONNECTIONS` to lowercase profile names and provide `MONGODB_<NAME>_URI`, mode, TLS CA, read preference, database allowlist, and collection allowlist for each. The agent sees only the profile name; the URI and its embedded credential remain inaccessible in `config\itops.env`.
+
+Database discovery uses `listDatabases` with `authorizedDatabases=true`. It returns only databases visible to that URI's identity, applies `MONGODB_<NAME>_DATABASE_ALLOWLIST`, and always removes `admin`, `config`, and `local`. Grant `read` separately on every application database the profile should expose. When several profiles or databases exist, omission of either selector fails closed.
 
 ## Argo CD Microsoft SSO
 

@@ -2,7 +2,10 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { parse } from "yaml";
 import {
-  ConfigError,
+  loadMongoProfiles,
+  loadSqlServerProfiles,
+} from "../common/database-profiles.js";
+import {
   enabled,
   env,
   envBoolean,
@@ -187,6 +190,19 @@ async function validateAgents(): Promise<void> {
         rules.some((rule) => rule.capability === "mcp" && rule.effect === "allow"),
         `${file}: missing explicit MCP allow rules`,
       );
+      if (file === "itops-sql-server.md") {
+        check(
+          profile.includes("itops-sql-server/sql_list_connections"),
+          `${file}: missing named SQL connection discovery tool`,
+        );
+      }
+      if (file === "itops-mongodb-docdb.md") {
+        check(
+          profile.includes("itops-mongodb-docdb/mongodb_list_connections") &&
+            profile.includes("itops-mongodb-docdb/mongodb_list_databases"),
+          `${file}: missing named URI/database discovery tools`,
+        );
+      }
     } catch (error) {
       errors.push(`${file}: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -384,26 +400,26 @@ function validateRuntime(): void {
       }
     }
     if (enabled("SQLSERVER")) {
-      requireVariables(["SQLSERVER_HOST", "SQLSERVER_DATABASE"]);
-      const mode = envChoice("SQLSERVER_AUTH_MODE", ["windows", "sql"] as const, "windows");
-      if (mode === "windows") {
-        requireVariables(["SQLSERVER_ODBC_DRIVER"]);
-      } else {
-        requireVariables(["SQLSERVER_USERNAME", "SQLSERVER_PASSWORD"]);
-      }
-      if (!envBoolean("SQLSERVER_ENCRYPT", true)) errors.push("SQLSERVER_ENCRYPT must remain true");
-      if (envBoolean("SQLSERVER_TRUST_SERVER_CERTIFICATE", false)) {
-        errors.push("SQLSERVER_TRUST_SERVER_CERTIFICATE must remain false; install the issuing CA instead");
+      const profiles = loadSqlServerProfiles();
+      if (profiles.length > 1) {
+        warnings.push(
+          `SQL Server has ${profiles.length} named connections; every investigation tool call must select one explicitly`,
+        );
       }
     }
     if (enabled("MONGODB")) {
-      requireVariables(["MONGODB_URI", "MONGODB_DATABASE"]);
-      const uri = env("MONGODB_URI", { required: true });
-      if (/tls(?:allowinvalidcertificates|insecure)=true/i.test(uri)) {
-        errors.push("MONGODB_URI disables TLS certificate validation");
-      }
-      if (env("MONGODB_COLLECTION_ALLOWLIST", { defaultValue: "*", allowPlaceholder: true }) === "*") {
-        warnings.push("MONGODB_COLLECTION_ALLOWLIST=*; narrow it for least privilege");
+      const profiles = loadMongoProfiles();
+      for (const profile of profiles) {
+        if (profile.databaseAllowlist.includes("*")) {
+          warnings.push(
+            `MongoDB connection ${profile.name} database allowlist includes *; access is limited only by the read-only database identity and the system-database denylist`,
+          );
+        }
+        if (profile.collectionAllowlist.includes("*")) {
+          warnings.push(
+            `MongoDB connection ${profile.name} collection allowlist includes *; narrow it when possible`,
+          );
+        }
       }
     }
     if (enabled("DYNATRACE")) {

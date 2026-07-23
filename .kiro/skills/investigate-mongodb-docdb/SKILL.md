@@ -1,6 +1,6 @@
 ---
 name: investigate-mongodb-docdb
-description: Investigate incidents in MongoDB or Amazon DocumentDB with bounded read-only find and aggregation operations, projections, collection allowlists, secondary-read caveats, and safe schema sampling. Use for document state, event records, session/order state, missing/duplicate documents, TTL behavior, and time-correlated evidence.
+description: Investigate incidents across named MongoDB or Amazon DocumentDB URI connections with authorized-database discovery, explicit target selection, bounded read-only find and aggregation operations, database/collection allowlists, secondary-read caveats, and safe schema sampling. Use for document state, event records, session/order state, missing/duplicate documents, TTL behavior, and time-correlated evidence.
 ---
 
 # Investigate MongoDB or DocumentDB safely
@@ -9,7 +9,9 @@ Read [mongodb-docdb-playbook.md](references/mongodb-docdb-playbook.md) before us
 
 ## Narrow the question
 
-Require a collection, UTC window, and targeted identifier or status question. Use `mongodb_list_collections` and `mongodb_sample_schema` only when the shape is unknown and the collection is allowlisted.
+Require a connection, database, collection, UTC window, and targeted identifier or status question. Call `mongodb_list_connections`, then `mongodb_list_databases` when runtime evidence has not already established the target. Database discovery returns only non-system databases visible to the URI identity and allowed by configuration. Include both target values explicitly when there is more than one choice. Never fan out across all URIs or databases without a concrete incident reason.
+
+Use `mongodb_list_collections` and `mongodb_sample_schema` only when the shape is unknown and the database and collection are allowlisted.
 
 ## Query safely
 
@@ -41,7 +43,7 @@ Do not treat an empty result as definitive without coverage and freshness eviden
 
 Return:
 
-- database, collection, and observation time
+- connection, database, collection, and observation time
 - exact redacted filter/projection or aggregation pipeline
 - result count and truncation
 - aggregates and minimal representative documents

@@ -236,7 +236,7 @@ export function assertMongoCollectionScopes(
     if (typeof referencedCollection === "string") {
       const safe = assertSafeIdentifier(referencedCollection, "MongoDB referenced collection");
       if (!matchesAllowlist(safe, collectionPatterns)) {
-        throw new Error(`Collection ${safe} is outside MONGODB_COLLECTION_ALLOWLIST`);
+        throw new Error(`Collection ${safe} is outside the configured MongoDB collection allowlist`);
       }
     }
     assertMongoCollectionScopes(nested, collectionPatterns, depth + 1);

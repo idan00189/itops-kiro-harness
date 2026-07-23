@@ -77,6 +77,8 @@ Wave 2 runs targeted SQL, Mongo/DocumentDB, or source-code checks. Examples:
 
 Avoid questions like "find anything unusual in the database" or "search the repository for the bug." Source work requires the provider, allowlisted repository/project, exact deployed SHA, motivating evidence IDs, and a precise question.
 
+When several database connections are configured, runtime/deployment evidence should identify the expected connection first. The SQL specialist lists named profiles and queries exactly one. The Mongo/DocumentDB specialist lists named URIs, discovers the authorized application databases for the selected URI, and passes both selectors to every data call. Neither specialist broadcasts an investigation across all configured databases.
+
 ## Reports
 
 Reports are not created for routine chat questions or targeted checks, even when a specialist is used.
@@ -137,12 +139,15 @@ Kiro hot-reloads agent/MCP profile edits, but dependency or compiled server chan
 
 - MCP startup failure: run `npm run build`, then `npm run health`.
 - Splunk Kerberos failure: verify `curl.exe --version` lists SSPI/SPNEGO, the Windows ticket/SPN is valid, and the HTTPS endpoint returns `WWW-Authenticate: Negotiate`.
-- SQL replica refusal: verify the host is the AG listener, the database participates in the AG, read-only routing is configured, and the Windows identity can execute the replica proof.
+- SQL replica refusal: verify the named profile, its host is the correct AG listener, its exact database participates in the AG, read-only routing is configured, and that profile's identity can execute the replica proof.
+- SQL connection required: call `sql_list_connections` and select the profile identified by the incident evidence.
+- Mongo database discovery failure: confirm the URI identity has `read` on at least one application database and the server supports `authorizedDatabases=true`.
+- Mongo connection/database required: list connections and authorized databases, then pass both selectors explicitly.
 - Argo CD SSO failure: run `scripts\Initialize-ItOpsAuth.ps1`, verify the context name, and confirm your CLI supports `account session-token`.
 - Dynatrace OAuth failure: verify the confidential client, exact loopback callback, remote MCP URL, read scopes, and `/mcp auth`.
 - TLS failure: install/set the correct CA; never disable verification.
 - HTTP 401/403: verify the read-only token and resource permission.
-- Empty evidence: check window, timezone, retention, sampling, index/collection/project/repository allowlist, revision mapping, and replica lag.
+- Empty evidence: check connection/profile selection, database, window, timezone, retention, sampling, database/collection/project/repository allowlist, revision mapping, and replica lag.
 - Subagent fails immediately: verify its exact MCP permission rules and server startup.
 - Wiki result is missing: confirm the files are under `wiki\`, restart the Kiro session to refresh the auto-updated index, and inspect `/context show`.
 - Wiki result is stale or contradictory: preserve the conflict in the report and verify against immutable source/runtime evidence; do not silently edit the wiki.
