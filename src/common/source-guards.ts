@@ -52,6 +52,34 @@ export function assertSourceRef(value: string): string {
   return normalized;
 }
 
+export function assertSourceRevision(value: string): string {
+  const normalized = assertSourceRef(value);
+  if (!/^(?:[a-fA-F0-9]{40}|[a-fA-F0-9]{64})$/.test(normalized)) {
+    throw new Error(
+      "Source revision must be an exact 40- or 64-character deployed commit SHA",
+    );
+  }
+  return normalized.toLowerCase();
+}
+
+export function assertEvidenceRevision(
+  expectedRevision: string,
+  candidates: unknown[],
+  label: string,
+): string {
+  const expected = assertSourceRevision(expectedRevision);
+  const matching = candidates.some(
+    (candidate) =>
+      typeof candidate === "string" &&
+      /^(?:[a-fA-F0-9]{40}|[a-fA-F0-9]{64})$/.test(candidate) &&
+      candidate.toLowerCase() === expected,
+  );
+  if (!matching) {
+    throw new Error(`${label} does not match the supplied deployed commit SHA`);
+  }
+  return expected;
+}
+
 export function assertSourcePath(value: string, extraDeniedPatterns: string[] = []): string {
   assertNoControlCharacters(value, "Repository path");
   const normalized = value.replaceAll("\\", "/").replace(/^\/+/, "").replace(/\/+$/, "");

@@ -59,7 +59,7 @@ The installer:
 5. creates the ignored `config\itops.env` from the single template
 6. adds the exact ITOps subagents and MCP tools to this Windows user's Kiro permission file
 
-Every push and pull request also runs the pinned build, all tests, structural Kiro validation, and native PowerShell parsing on GitHub-hosted Windows and Linux runners. Live vendor connections and Kiro login remain workstation-only checks because CI has no production credentials.
+Every push and pull request also runs the pinned build, unit/guard tests, compiled MCP stdio contracts, isolated HTTP integration tests, structural Kiro validation, tracked-file/secret checks, production dependency audit, and native PowerShell parsing on GitHub-hosted Windows and Linux runners. Live vendor connections and Kiro login remain workstation-only checks because CI has no production credentials.
 
 Edit `config\itops.env`. Do not put real secrets in `config\itops.env.example`.
 
@@ -477,6 +477,7 @@ It enables knowledge and on-demand MCP Tool Search. Tool Search is optional beca
 - [Windows authentication and Microsoft SSO](docs/AUTHENTICATION.md)
 - [Read-only identity setup](docs/READ_ONLY_SETUP.md)
 - [Operating and investigating](docs/OPERATIONS.md)
+- [QA report and production acceptance](docs/QA_REPORT.md)
 - [Security model and production checklist](SECURITY.md)
 
 ## Important limitations

@@ -3,9 +3,10 @@ import { enabled, env, envCsv, envInteger, requireSafeBaseUrl } from "../common/
 import { basic, bearer, fetchJson, fetchText, withQuery } from "../common/http.js";
 import {
   assertBitbucketRepository,
+  assertEvidenceRevision,
   assertGitLabProject,
   assertSourcePath,
-  assertSourceRef,
+  assertSourceRevision,
   assertTextSource,
 } from "../common/source-guards.js";
 import { createServer, readOnlyAnnotations, runTool, startServer } from "../common/mcp.js";
@@ -123,7 +124,7 @@ server.registerTool(
     description: "List one bounded directory at an allowlisted repository and ref.",
     inputSchema: z.object({
       ...bitbucketRepositoryInput,
-      ref: z.string().min(1).max(255),
+      ref: z.string().min(40).max(64),
       path: z.string().max(1_000).default(""),
       pageLength: z.number().int().min(1).max(100).default(50),
     }),
@@ -133,7 +134,7 @@ server.registerTool(
     runTool(SERVER, "bitbucket_tree", input, async () => {
       assertProviderEnabled("BITBUCKET");
       const root = bitbucketRepo(input.workspace, input.repository);
-      const ref = encodeURIComponent(assertSourceRef(input.ref));
+      const ref = encodeURIComponent(assertSourceRevision(input.ref));
       const path = input.path ? `/${encodedSourcePath(input.path)}` : "/";
       return fetchJson(
         bitbucketBase(),
@@ -154,7 +155,7 @@ server.registerTool(
       "Read one bounded UTF-8 text file at an allowlisted repository and ref. Secret-bearing paths and binary content are blocked.",
     inputSchema: z.object({
       ...bitbucketRepositoryInput,
-      ref: z.string().min(1).max(255),
+      ref: z.string().min(40).max(64),
       path: z.string().min(1).max(1_000),
       maxBytes: z.number().int().min(1_000).max(2_000_000).optional(),
     }),
@@ -165,7 +166,7 @@ server.registerTool(
       assertProviderEnabled("BITBUCKET");
       const content = await fetchText(
         bitbucketBase(),
-        `${bitbucketRepo(input.workspace, input.repository)}/src/${encodeURIComponent(assertSourceRef(input.ref))}/${encodedSourcePath(input.path)}`,
+        `${bitbucketRepo(input.workspace, input.repository)}/src/${encodeURIComponent(assertSourceRevision(input.ref))}/${encodedSourcePath(input.path)}`,
         { headers: { ...bitbucketHeaders(), Accept: "text/plain" } },
       );
       return {
@@ -185,7 +186,7 @@ server.registerTool(
     description: "List a bounded page of commits for one allowlisted repository and ref.",
     inputSchema: z.object({
       ...bitbucketRepositoryInput,
-      ref: z.string().min(1).max(255),
+      ref: z.string().min(40).max(64),
       pageLength: z.number().int().min(1).max(100).default(30),
     }),
     annotations: readOnlyAnnotations,
@@ -196,7 +197,7 @@ server.registerTool(
       return fetchJson(
         bitbucketBase(),
         withQuery(
-          `${bitbucketRepo(input.workspace, input.repository)}/commits/${encodeURIComponent(assertSourceRef(input.ref))}`,
+          `${bitbucketRepo(input.workspace, input.repository)}/commits/${encodeURIComponent(assertSourceRevision(input.ref))}`,
           { pagelen: input.pageLength },
         ),
         { headers: bitbucketHeaders() },
@@ -211,7 +212,7 @@ server.registerTool(
     description: "Read commit metadata, diffstat, and an optionally bounded patch.",
     inputSchema: z.object({
       ...bitbucketRepositoryInput,
-      commit: z.string().min(1).max(255),
+      commit: z.string().min(40).max(64),
       includePatch: z.boolean().default(true),
       maxPatchCharacters: z.number().int().min(1_000).max(200_000).default(80_000),
     }),
@@ -221,7 +222,7 @@ server.registerTool(
     runTool(SERVER, "bitbucket_commit_diff", input, async () => {
       assertProviderEnabled("BITBUCKET");
       const root = bitbucketRepo(input.workspace, input.repository);
-      const commit = encodeURIComponent(assertSourceRef(input.commit));
+      const commit = encodeURIComponent(assertSourceRevision(input.commit));
       const [metadata, diffstat, patch] = await Promise.all([
         fetchJson(bitbucketBase(), `${root}/commit/${commit}`, { headers: bitbucketHeaders() }),
         fetchJson(bitbucketBase(), `${root}/diffstat/${commit}`, { headers: bitbucketHeaders() }),
@@ -248,6 +249,7 @@ server.registerTool(
     inputSchema: z.object({
       ...bitbucketRepositoryInput,
       pullRequestId: z.number().int().positive(),
+      deployedRevision: z.string().min(40).max(64),
       includeDiff: z.boolean().default(true),
       maxDiffCharacters: z.number().int().min(1_000).max(200_000).default(80_000),
     }),
@@ -256,13 +258,23 @@ server.registerTool(
   async (input) =>
     runTool(SERVER, "bitbucket_pull_request", input, async () => {
       assertProviderEnabled("BITBUCKET");
-      type PullRequest = { links?: { diff?: { href?: string }; diffstat?: { href?: string } } };
+      const deployedRevision = assertSourceRevision(input.deployedRevision);
+      type PullRequest = {
+        merge_commit?: { hash?: string };
+        source?: { commit?: { hash?: string } };
+        links?: { diff?: { href?: string }; diffstat?: { href?: string } };
+      };
       const base = bitbucketBase();
       const repositoryRoot = bitbucketRepo(input.workspace, input.repository);
       const pullRequest = await fetchJson<PullRequest>(
         base,
         `${repositoryRoot}/pullrequests/${input.pullRequestId}`,
         { headers: bitbucketHeaders() },
+      );
+      assertEvidenceRevision(
+        deployedRevision,
+        [pullRequest.merge_commit?.hash, pullRequest.source?.commit?.hash],
+        "Bitbucket pull request",
       );
       const diffHref = pullRequest.links?.diff?.href;
       const diffstatHref = pullRequest.links?.diffstat?.href;
@@ -279,6 +291,7 @@ server.registerTool(
           : Promise.resolve(undefined),
       ]);
       return {
+        deployedRevision,
         pullRequest,
         diffstat,
         diff: diff.slice(0, input.maxDiffCharacters),
@@ -296,8 +309,7 @@ server.registerTool(
     inputSchema: z.object({
       ...bitbucketRepositoryInput,
       pipelineUuid: z.string().min(3).max(100).optional(),
-      ref: z.string().min(1).max(255).optional(),
-      commit: z.string().min(1).max(255).optional(),
+      deployedRevision: z.string().min(40).max(64),
       pageLength: z.number().int().min(1).max(50).default(20),
     }),
     annotations: readOnlyAnnotations,
@@ -305,28 +317,32 @@ server.registerTool(
   async (input) =>
     runTool(SERVER, "bitbucket_pipelines", input, async () => {
       assertProviderEnabled("BITBUCKET");
+      const deployedRevision = assertSourceRevision(input.deployedRevision);
       const root = `${bitbucketRepo(input.workspace, input.repository)}/pipelines`;
       if (input.pipelineUuid) {
         const uuid = encodeURIComponent(input.pipelineUuid);
+        type Pipeline = { target?: { commit?: { hash?: string } } };
         const [pipeline, steps] = await Promise.all([
-          fetchJson(bitbucketBase(), `${root}/${uuid}`, { headers: bitbucketHeaders() }),
+          fetchJson<Pipeline>(bitbucketBase(), `${root}/${uuid}`, { headers: bitbucketHeaders() }),
           fetchJson(
             bitbucketBase(),
             withQuery(`${root}/${uuid}/steps`, { pagelen: input.pageLength }),
             { headers: bitbucketHeaders() },
           ),
         ]);
-        return { pipeline, steps };
+        assertEvidenceRevision(
+          deployedRevision,
+          [pipeline.target?.commit?.hash],
+          "Bitbucket pipeline",
+        );
+        return { deployedRevision, pipeline, steps };
       }
-      const filters: string[] = [];
-      if (input.ref) filters.push(`target.ref_name = "${assertSourceRef(input.ref)}"`);
-      if (input.commit) filters.push(`target.commit.hash = "${assertSourceRef(input.commit)}"`);
       return fetchJson(
         bitbucketBase(),
         withQuery(`${root}/`, {
           pagelen: input.pageLength,
           sort: "-created_on",
-          q: filters.length ? filters.join(" AND ") : undefined,
+          q: `target.commit.hash = "${deployedRevision}"`,
         }),
         { headers: bitbucketHeaders() },
       );
@@ -340,7 +356,7 @@ server.registerTool(
     description: "List one bounded directory at an allowlisted GitLab project and ref.",
     inputSchema: z.object({
       ...gitlabProjectInput,
-      ref: z.string().min(1).max(255).default("HEAD"),
+      ref: z.string().min(40).max(64),
       path: z.string().max(1_000).default(""),
       recursive: z.boolean().default(false),
       pageSize: z.number().int().min(1).max(100).default(50),
@@ -353,7 +369,7 @@ server.registerTool(
       return fetchJson(
         gitlabBase(),
         withQuery(`/api/v4/projects/${gitlabProject(input.project)}/repository/tree`, {
-          ref: assertSourceRef(input.ref),
+          ref: assertSourceRevision(input.ref),
           path: input.path ? sourcePath(input.path) : undefined,
           recursive: input.recursive,
           per_page: input.pageSize,
@@ -372,7 +388,7 @@ server.registerTool(
       "Read one bounded UTF-8 text file at an allowlisted GitLab project and ref. Secret-bearing paths and binary content are blocked.",
     inputSchema: z.object({
       ...gitlabProjectInput,
-      ref: z.string().min(1).max(255),
+      ref: z.string().min(40).max(64),
       path: z.string().min(1).max(1_000),
       maxBytes: z.number().int().min(1_000).max(2_000_000).optional(),
     }),
@@ -395,7 +411,7 @@ server.registerTool(
         gitlabBase(),
         withQuery(
           `/api/v4/projects/${gitlabProject(input.project)}/repository/files/${encodedGitLabSourcePath(input.path)}`,
-          { ref: assertSourceRef(input.ref) },
+          { ref: assertSourceRevision(input.ref) },
         ),
         { headers: gitlabHeaders() },
       );
@@ -423,7 +439,7 @@ server.registerTool(
     inputSchema: z.object({
       ...gitlabProjectInput,
       search: z.string().min(2).max(200),
-      ref: z.string().min(1).max(255).optional(),
+      ref: z.string().min(40).max(64),
       pageSize: z.number().int().min(1).max(100).default(30),
     }),
     annotations: readOnlyAnnotations,
@@ -436,7 +452,7 @@ server.registerTool(
         withQuery(`/api/v4/projects/${gitlabProject(input.project)}/search`, {
           scope: "blobs",
           search: input.search,
-          ref: input.ref ? assertSourceRef(input.ref) : undefined,
+          ref: assertSourceRevision(input.ref),
           per_page: input.pageSize,
           page: 1,
         }),
@@ -452,7 +468,7 @@ server.registerTool(
     description: "List bounded commits by ref, time window, or source path.",
     inputSchema: z.object({
       ...gitlabProjectInput,
-      ref: z.string().min(1).max(255).default("HEAD"),
+      ref: z.string().min(40).max(64),
       since: z.string().datetime({ offset: true }).optional(),
       until: z.string().datetime({ offset: true }).optional(),
       path: z.string().max(1_000).optional(),
@@ -466,7 +482,7 @@ server.registerTool(
       return fetchJson(
         gitlabBase(),
         withQuery(`/api/v4/projects/${gitlabProject(input.project)}/repository/commits`, {
-          ref_name: assertSourceRef(input.ref),
+          ref_name: assertSourceRevision(input.ref),
           since: input.since,
           until: input.until,
           path: input.path ? sourcePath(input.path) : undefined,
@@ -485,7 +501,7 @@ server.registerTool(
     description: "Read one commit and a bounded first page of its unified diff.",
     inputSchema: z.object({
       ...gitlabProjectInput,
-      commit: z.string().min(1).max(255),
+      commit: z.string().min(40).max(64),
       pageSize: z.number().int().min(1).max(100).default(50),
     }),
     annotations: readOnlyAnnotations,
@@ -493,7 +509,7 @@ server.registerTool(
   async (input) =>
     runTool(SERVER, "gitlab_commit_diff", input, async () => {
       assertProviderEnabled("GITLAB");
-      const root = `/api/v4/projects/${gitlabProject(input.project)}/repository/commits/${encodeURIComponent(assertSourceRef(input.commit))}`;
+      const root = `/api/v4/projects/${gitlabProject(input.project)}/repository/commits/${encodeURIComponent(assertSourceRevision(input.commit))}`;
       const [commit, diff] = await Promise.all([
         fetchJson(gitlabBase(), root, { headers: gitlabHeaders() }),
         fetchJson(
@@ -518,6 +534,7 @@ server.registerTool(
     inputSchema: z.object({
       ...gitlabProjectInput,
       mergeRequestIid: z.number().int().positive(),
+      deployedRevision: z.string().min(40).max(64),
       pageSize: z.number().int().min(1).max(100).default(50),
     }),
     annotations: readOnlyAnnotations,
@@ -525,9 +542,16 @@ server.registerTool(
   async (input) =>
     runTool(SERVER, "gitlab_merge_request", input, async () => {
       assertProviderEnabled("GITLAB");
+      const deployedRevision = assertSourceRevision(input.deployedRevision);
       const root = `/api/v4/projects/${gitlabProject(input.project)}/merge_requests/${input.mergeRequestIid}`;
+      type MergeRequest = {
+        merge_commit_sha?: string;
+        squash_commit_sha?: string;
+        sha?: string;
+        diff_refs?: { head_sha?: string };
+      };
       const [mergeRequest, diffs] = await Promise.all([
-        fetchJson(gitlabBase(), root, { headers: gitlabHeaders() }),
+        fetchJson<MergeRequest>(gitlabBase(), root, { headers: gitlabHeaders() }),
         fetchJson(
           gitlabBase(),
           withQuery(`${root}/diffs`, {
@@ -538,7 +562,17 @@ server.registerTool(
           { headers: gitlabHeaders() },
         ),
       ]);
-      return { mergeRequest, diffs };
+      assertEvidenceRevision(
+        deployedRevision,
+        [
+          mergeRequest.merge_commit_sha,
+          mergeRequest.squash_commit_sha,
+          mergeRequest.sha,
+          mergeRequest.diff_refs?.head_sha,
+        ],
+        "GitLab merge request",
+      );
+      return { deployedRevision, mergeRequest, diffs };
     }),
 );
 
@@ -551,8 +585,7 @@ server.registerTool(
     inputSchema: z.object({
       ...gitlabProjectInput,
       pipelineId: z.number().int().positive().optional(),
-      ref: z.string().min(1).max(255).optional(),
-      commit: z.string().min(1).max(255).optional(),
+      deployedRevision: z.string().min(40).max(64),
       updatedAfter: z.string().datetime({ offset: true }).optional(),
       updatedBefore: z.string().datetime({ offset: true }).optional(),
       pageSize: z.number().int().min(1).max(100).default(30),
@@ -562,10 +595,12 @@ server.registerTool(
   async (input) =>
     runTool(SERVER, "gitlab_pipelines", input, async () => {
       assertProviderEnabled("GITLAB");
+      const deployedRevision = assertSourceRevision(input.deployedRevision);
       const root = `/api/v4/projects/${gitlabProject(input.project)}/pipelines`;
       if (input.pipelineId) {
+        type Pipeline = { sha?: string };
         const [pipeline, jobs] = await Promise.all([
-          fetchJson(gitlabBase(), `${root}/${input.pipelineId}`, { headers: gitlabHeaders() }),
+          fetchJson<Pipeline>(gitlabBase(), `${root}/${input.pipelineId}`, { headers: gitlabHeaders() }),
           fetchJson(
             gitlabBase(),
             withQuery(`${root}/${input.pipelineId}/jobs`, {
@@ -576,13 +611,17 @@ server.registerTool(
             { headers: gitlabHeaders() },
           ),
         ]);
-        return { pipeline, jobs };
+        assertEvidenceRevision(
+          deployedRevision,
+          [pipeline.sha],
+          "GitLab pipeline",
+        );
+        return { deployedRevision, pipeline, jobs };
       }
       return fetchJson(
         gitlabBase(),
         withQuery(root, {
-          ref: input.ref ? assertSourceRef(input.ref) : undefined,
-          sha: input.commit ? assertSourceRef(input.commit) : undefined,
+          sha: deployedRevision,
           updated_after: input.updatedAfter,
           updated_before: input.updatedBefore,
           order_by: "updated_at",
@@ -603,6 +642,7 @@ server.registerTool(
     inputSchema: z.object({
       ...gitlabProjectInput,
       jobId: z.number().int().positive(),
+      deployedRevision: z.string().min(40).max(64),
       maxCharacters: z.number().int().min(1_000).max(200_000).default(80_000),
     }),
     annotations: readOnlyAnnotations,
@@ -610,13 +650,24 @@ server.registerTool(
   async (input) =>
     runTool(SERVER, "gitlab_job_trace", input, async () => {
       assertProviderEnabled("GITLAB");
-      const trace = await fetchText(
-        gitlabBase(),
-        `/api/v4/projects/${gitlabProject(input.project)}/jobs/${input.jobId}/trace`,
-        { headers: { ...gitlabHeaders(), Accept: "text/plain" } },
+      const deployedRevision = assertSourceRevision(input.deployedRevision);
+      const root = `/api/v4/projects/${gitlabProject(input.project)}/jobs/${input.jobId}`;
+      type Job = { commit?: { id?: string }; pipeline?: { sha?: string } };
+      const [job, trace] = await Promise.all([
+        fetchJson<Job>(gitlabBase(), root, { headers: gitlabHeaders() }),
+        fetchText(gitlabBase(), `${root}/trace`, {
+          headers: { ...gitlabHeaders(), Accept: "text/plain" },
+        }),
+      ]);
+      assertEvidenceRevision(
+        deployedRevision,
+        [job.commit?.id, job.pipeline?.sha],
+        "GitLab job",
       );
       return {
+        deployedRevision,
         jobId: input.jobId,
+        job,
         traceTail: trace.slice(-input.maxCharacters),
         traceTruncated: trace.length > input.maxCharacters,
       };

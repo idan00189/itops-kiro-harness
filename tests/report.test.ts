@@ -1,6 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { incidentReportSchema, assertHebrewReport, type IncidentReport } from "../src/report/model.js";
+import { z } from "zod";
+import {
+  incidentReportSchema,
+  assertHebrewReport,
+  parseIncidentReportJson,
+  reportWriteToolInputSchema,
+  type IncidentReport,
+} from "../src/report/model.js";
 import { renderHtml, renderMarkdown } from "../src/report/render.js";
+
+function maximumContainerDepth(value: unknown, depth = 0): number {
+  if (!value || typeof value !== "object") return depth;
+  const nested = Array.isArray(value) ? value : Object.values(value);
+  return nested.reduce(
+    (maximum, item) => Math.max(maximum, maximumContainerDepth(item, depth + 1)),
+    depth + 1,
+  );
+}
 
 function reportFixture(): IncidentReport {
   return incidentReportSchema.parse({
@@ -68,6 +84,26 @@ function reportFixture(): IncidentReport {
 }
 
 describe("Hebrew incident report", () => {
+  it("keeps the MCP write contract shallow and parses the strict report server-side", () => {
+    const report = reportFixture();
+    const input = reportWriteToolInputSchema.parse({
+      reportJson: JSON.stringify(report),
+      format: "md",
+    });
+    expect(parseIncidentReportJson(input.reportJson)).toEqual(report);
+
+    const jsonSchema = z.toJSONSchema(reportWriteToolInputSchema);
+    expect(maximumContainerDepth(jsonSchema)).toBeLessThanOrEqual(5);
+    expect(jsonSchema.properties).toHaveProperty("reportJson");
+    expect(jsonSchema.properties).not.toHaveProperty("report");
+    expect(JSON.stringify(jsonSchema)).not.toContain("executiveSummary");
+  });
+
+  it("rejects malformed or structurally invalid report JSON", () => {
+    expect(() => parseIncidentReportJson("{")).toThrow(/valid JSON/);
+    expect(() => parseIncidentReportJson('{"metadata":{}}')).toThrow();
+  });
+
   it("validates and renders the default Markdown report", () => {
     const report = reportFixture();
     expect(() => assertHebrewReport(report)).not.toThrow();

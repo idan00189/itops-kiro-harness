@@ -1,6 +1,6 @@
 {
   "name": "itops-kiro-harness",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
   "description": "Read-only, multi-agent ITOps investigation harness for Kiro CLI v3",
@@ -11,11 +11,13 @@
     "clean": "node scripts/clean.mjs",
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "test:protocol": "vitest run tests/mcp-contract.test.ts tests/mcp-http-integrations.test.ts",
     "validate": "node dist/cli/validate-config.js",
     "validate:runtime": "node dist/cli/validate-config.js --runtime",
+    "validate:static": "node scripts/qa-static.mjs",
     "health": "node dist/cli/healthcheck.js",
     "configure:kiro-permissions": "node dist/cli/configure-kiro-permissions.js",
-    "verify": "npm run build && npm test && npm run validate"
+    "verify": "npm run build && npm test && npm run validate && npm run validate:static"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",

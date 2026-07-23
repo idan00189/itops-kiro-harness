@@ -19,7 +19,9 @@
 - [x] Add Splunk Windows Kerberos/SPNEGO, Argo CD SSO initialization, and authentication-mode validation.
 - [x] Add exact machine-local Kiro subagent/MCP permission installation, backup, validation, and removal.
 - [x] Flatten the public Splunk dashboard tool schema and retain strict internal panel validation.
-- [x] Replace the agent-loop session hook with deterministic `AgentSpawn` policy context.
+- [x] Flatten the public report-write schema and retain strict internal incident-report validation.
+- [x] Require exact deployed full commit SHAs for all Bitbucket/GitLab source and CI evidence reads.
+- [x] Replace the agent-loop session hook with deterministic v3 `SessionStart` policy context.
 - [x] Install pinned dependencies and produce the lockfile.
-- [x] Run compilation, tests, structural validation, and secret scan.
+- [x] Run compilation, unit/guard tests, compiled MCP protocol tests, mocked HTTP integration tests, structural/skill validation, dependency audit, and secret scan.
 - [ ] Run live connection health checks after the operator supplies credentials.

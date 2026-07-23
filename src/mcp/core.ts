@@ -8,7 +8,7 @@ import {
   runTool,
   startServer,
 } from "../common/mcp.js";
-import { incidentReportSchema } from "../report/model.js";
+import { parseIncidentReportJson, reportWriteToolInputSchema } from "../report/model.js";
 import { writeIncidentReport, writeSplunkDashboardArtifact } from "../report/write.js";
 
 const SERVER = "itops-core";
@@ -170,15 +170,18 @@ server.registerTool(
     title: "Write Hebrew incident report locally",
     description:
       "Validate and atomically write a structured Hebrew incident report under the local reports directory. Markdown is the default; HTML is optional.",
-    inputSchema: z.object({
-      report: incidentReportSchema,
-      format: z.enum(["md", "html"]).default("md"),
-    }),
+    inputSchema: reportWriteToolInputSchema,
     annotations: localWriteAnnotations,
   },
   async (input) =>
-    runTool(SERVER, "report_write", { incidentId: input.report.metadata.incidentId, format: input.format }, () =>
-      writeIncidentReport(input.report, input.format),
+    runTool(
+      SERVER,
+      "report_write",
+      { format: input.format, reportJsonBytes: Buffer.byteLength(input.reportJson, "utf8") },
+      () => {
+        const report = parseIncidentReportJson(input.reportJson);
+        return writeIncidentReport(report, input.format);
+      },
     ),
 );
 
