@@ -10,7 +10,11 @@ import {
 import { bearer, fetchJson, fetchText, withQuery } from "../common/http.js";
 import { createServer, readOnlyAnnotations, runTool, startServer } from "../common/mcp.js";
 import { fetchNegotiateJson, fetchNegotiateText } from "../common/negotiate.js";
-import { generateDashboardXml } from "../splunk/dashboard.js";
+import {
+  generateDashboardXml,
+  parseDashboardPanelsJson,
+  splunkDashboardToolInputSchema,
+} from "../splunk/dashboard.js";
 
 const SERVER = "itops-splunk";
 const server = createServer(
@@ -181,35 +185,28 @@ server.registerTool(
   {
     title: "Generate Splunk Simple XML offline",
     description:
-      "Generate a classic Splunk Simple XML dashboard locally in memory. The XML is returned but never uploaded to Splunk.",
-    inputSchema: z.object({
-      title: z.string().min(1).max(200),
-      description: z.string().max(1_000).optional(),
-      panels: z
-        .array(
-          z.object({
-            title: z.string().min(1).max(200),
-            search: z.string().min(1).max(20_000),
-            earliest: z.string().min(1).max(100).default("-24h"),
-            latest: z.string().min(1).max(100).default("now"),
-            visualization: z.enum(["table", "chart", "single", "event"]).default("table"),
-            chartType: z.enum(["line", "area", "bar", "column", "pie"]).optional(),
-          }),
-        )
-        .min(1)
-        .max(24),
-    }),
+      'Generate a classic Splunk Simple XML dashboard locally in memory. panelsJson must be a JSON array of objects with title, search, earliest, latest, visualization, and optional chartType. The XML is returned but never uploaded to Splunk.',
+    inputSchema: splunkDashboardToolInputSchema,
     annotations: {
       ...readOnlyAnnotations,
       openWorldHint: false,
     },
   },
   async (input) =>
-    runTool(SERVER, "splunk_generate_dashboard_xml", { panelCount: input.panels.length }, async () => ({
-      xml: generateDashboardXml(input.title, input.description, input.panels),
-      uploadPerformed: false,
-      format: "Splunk Simple XML 1.1",
-    })),
+    runTool(
+      SERVER,
+      "splunk_generate_dashboard_xml",
+      { panelsJsonBytes: Buffer.byteLength(input.panelsJson, "utf8") },
+      async () => {
+        const panels = parseDashboardPanelsJson(input.panelsJson);
+        return {
+          xml: generateDashboardXml(input.title, input.description, panels),
+          panelCount: panels.length,
+          uploadPerformed: false,
+          format: "Splunk Simple XML 1.1",
+        };
+      },
+    ),
 );
 
 server.registerTool(

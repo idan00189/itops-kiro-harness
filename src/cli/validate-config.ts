@@ -20,6 +20,10 @@ import {
   assertBitbucketRepository,
   assertGitLabProject,
 } from "../common/source-guards.js";
+import {
+  ITOPS_TRUSTED_MCP_TOOLS,
+  ITOPS_TRUSTED_SUBAGENTS,
+} from "./configure-kiro-permissions.js";
 
 const root = process.cwd();
 const runtime = process.argv.includes("--runtime");
@@ -64,6 +68,15 @@ async function validateAgents(): Promise<void> {
     ...specialistAgents.map((name) => `${name}.md`),
   ]);
   const files = (await readdir(directory)).filter((file) => file.endsWith(".md"));
+  check(
+    specialistAgents.length === ITOPS_TRUSTED_SUBAGENTS.length &&
+      specialistAgents.every((name) =>
+        ITOPS_TRUSTED_SUBAGENTS.includes(
+          name as (typeof ITOPS_TRUSTED_SUBAGENTS)[number],
+        ),
+      ),
+    "Machine-local trusted subagents must match the six specialist profiles",
+  );
   check(files.length === expected.size, `Expected ${expected.size} agent profiles, found ${files.length}`);
   for (const name of expected) check(files.includes(name), `Missing agent profile ${name}`);
 
@@ -190,6 +203,30 @@ async function validateAgents(): Promise<void> {
         rules.some((rule) => rule.capability === "mcp" && rule.effect === "allow"),
         `${file}: missing explicit MCP allow rules`,
       );
+      const mcpMatches = rules
+        .filter((rule) => rule.capability === "mcp" && rule.effect === "allow")
+        .flatMap((rule) =>
+          Array.isArray(rule.match) ? rule.match.map(String) : [],
+        );
+      const server = servers[0];
+      if (server) {
+        const machineTrustedForServer = ITOPS_TRUSTED_MCP_TOOLS.filter(
+          (tool) => tool.startsWith(`${server}/`),
+        );
+        check(
+          mcpMatches.length === machineTrustedForServer.length &&
+            mcpMatches.every((tool) =>
+              machineTrustedForServer.includes(
+                tool as (typeof ITOPS_TRUSTED_MCP_TOOLS)[number],
+              ),
+            ),
+          `${file}: exact MCP rules must match the machine-local ITOps trust list`,
+        );
+        check(
+          !mcpMatches.some((tool) => tool.includes("*")),
+          `${file}: wildcard MCP trust is forbidden`,
+        );
+      }
       if (file === "itops-sql-server.md") {
         check(
           profile.includes("itops-sql-server/sql_list_connections"),
@@ -283,6 +320,7 @@ async function validateHooks(): Promise<void> {
       for (const hook of document.hooks ?? []) {
         check(
           [
+            "AgentSpawn",
             "SessionStart",
             "Stop",
             "PreToolUse",
@@ -315,6 +353,8 @@ async function validateLayout(): Promise<void> {
     "config/itops.env.example",
     "docs/AUTHENTICATION.md",
     "scripts/Initialize-ItOpsAuth.ps1",
+    "scripts/Set-ItOpsKiroPermissions.ps1",
+    "scripts/hooks/session-policy.mjs",
     "wiki/.gitkeep",
     ".kiro/steering/product.md",
     ".kiro/steering/tech.md",

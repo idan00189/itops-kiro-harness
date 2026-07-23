@@ -1,4 +1,5 @@
 import { assertReadOnlySpl } from "../common/guards.js";
+import { z } from "zod";
 
 export function escapeXml(value: string): string {
   return value
@@ -17,6 +18,41 @@ export type DashboardPanel = {
   visualization: "table" | "chart" | "single" | "event";
   chartType?: "line" | "area" | "bar" | "column" | "pie" | undefined;
 };
+
+const dashboardPanelsSchema = z
+  .array(
+    z.object({
+      title: z.string().min(1).max(200),
+      search: z.string().min(1).max(20_000),
+      earliest: z.string().min(1).max(100).default("-24h"),
+      latest: z.string().min(1).max(100).default("now"),
+      visualization: z
+        .enum(["table", "chart", "single", "event"])
+        .default("table"),
+      chartType: z.enum(["line", "area", "bar", "column", "pie"]).optional(),
+    }),
+  )
+  .min(1)
+  .max(24);
+
+// Keep the MCP-facing schema deliberately flat. Some model providers reject
+// every tool in a server when one function declaration nests past five JSON
+// levels. The panel structure is validated after parsing the JSON string.
+export const splunkDashboardToolInputSchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().max(1_000).optional(),
+  panelsJson: z.string().min(2).max(200_000),
+});
+
+export function parseDashboardPanelsJson(value: string): DashboardPanel[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error("panelsJson must be valid JSON");
+  }
+  return dashboardPanelsSchema.parse(parsed);
+}
 
 export function generateDashboardXml(
   title: string,

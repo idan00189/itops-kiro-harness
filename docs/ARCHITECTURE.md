@@ -4,7 +4,7 @@
 
 The harness uses workspace Markdown profiles in `.kiro/agents/`. Every profile embeds exactly one MCP server. Six use local stdio MCP processes; the Dynatrace specialist uses the official remote Dynatrace MCP through Kiro OAuth. There is no workspace-global `mcp.json`, so a specialist cannot inherit unrelated database or operations tools.
 
-The orchestrator is the only user-facing agent and the only profile with `subagent`. It answers ordinary questions directly and uses specialists only when evidence is needed. Both Kiro `availableAgents`/`trustedAgents` and capability permissions restrict delegation to the six named read-only specialists. Specialists cannot spawn agents and return their summaries to the orchestrator.
+The orchestrator is the only user-facing agent and the only profile with `subagent`. It answers ordinary questions directly and uses specialists only when evidence is needed. Kiro `availableAgents`/`trustedAgents`, agent capability rules, and a machine-local exact permission allowlist restrict delegation to the six named read-only specialists. Specialists cannot spawn agents and return their summaries to the orchestrator. The installer reconciles the local allowlist because Kiro intentionally keeps trust decisions outside a cloned repository.
 
 ```mermaid
 sequenceDiagram
@@ -45,8 +45,8 @@ sequenceDiagram
 | tool-category tags | `knowledge`, `todo_list`, orchestrator-only `subagent`, and `@mcp` |
 | inline MCP servers | six portable agent-specific stdio processes plus official remote Dynatrace MCP |
 | remote MCP OAuth | Dynatrace confidential client, browser PKCE/Microsoft SSO, token refresh in Kiro |
-| capability permissions | isolated MCP allow rules and denied shell/fs_write/web |
-| standalone v1 hooks | session policy, pre-tool blocker, post-tool audit, manual report QA |
+| capability permissions | exact machine-local subagent/MCP trust plus isolated agent rules denying shell/fs_write/web |
+| standalone v1 hooks | deterministic `AgentSpawn` session policy, pre-tool blocker, post-tool audit, manual report QA |
 | custom subagents | isolated observability, data, deployment, and source investigations |
 | subagent allow/trust lists | only the six custom ITOps specialists can run; no default general-purpose subagent |
 | Agent Skills | progressive domain playbooks and references |
@@ -76,7 +76,7 @@ Using an MCP tool or specialist never activates report mode by itself.
 
 ## MCP implementation
 
-The custom servers use local stdio and the stable `@modelcontextprotocol/sdk` v1 package. Dynatrace uses the vendor-hosted remote MCP. Tool schemas use Zod. Every network base URL comes from the environment, must be HTTPS except OAuth loopback, and cannot be replaced by a tool argument. Redirects across origins are rejected.
+The custom servers use local stdio and the stable `@modelcontextprotocol/sdk` v1 package. Dynatrace uses the vendor-hosted remote MCP. Tool schemas use Zod. Public function-declaration schemas are kept shallow enough for supported model providers; rich Splunk dashboard panels cross the MCP boundary as a `panelsJson` string and are parsed and strictly validated inside the server. Every network base URL comes from the environment, must be HTTPS except OAuth loopback, and cannot be replaced by a tool argument. Redirects across origins are rejected.
 
 Shared controls:
 

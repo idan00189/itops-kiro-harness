@@ -54,10 +54,45 @@ The installer:
 3. compiles and tests the six local MCP servers and validates the remote Dynatrace profile
 4. validates all seven skills and agent profiles
 5. creates the ignored `config\itops.env` from the single template
+6. adds the exact ITOps subagents and MCP tools to this Windows user's Kiro permission file
 
 Edit `config\itops.env`. Do not put real secrets in `config\itops.env.example`.
 
 Provision the external identities first; see [Authentication](docs/AUTHENTICATION.md) and [Read-only setup](docs/READ_ONLY_SETUP.md).
+
+### One-time Kiro permissions on each PC
+
+Kiro v3 stores trusted-tool decisions outside a repository in `%USERPROFILE%\.kiro\settings\permissions.yaml`. Git therefore cannot—and should not—silently grant trust on another PC. `Install-ItOps.ps1` performs this local step explicitly for the signed-in Windows user. It preserves existing rules, backs up an existing file, and adds only the six named subagents and exact ITOps MCP tool names. The vendor-facing tools are reads; the two output tools are constrained local report/XML writes. It does not trust wildcards, shell commands, generic filesystem writes, or unrelated MCP servers.
+
+If the repository was already installed before this feature was added, run:
+
+```powershell
+npm ci
+npm run build
+.\scripts\Set-ItOpsKiroPermissions.ps1
+.\scripts\Set-ItOpsKiroPermissions.ps1 -Check
+```
+
+To preview or remove only the rules managed by ITOps:
+
+```powershell
+.\scripts\Set-ItOpsKiroPermissions.ps1 -DryRun
+.\scripts\Set-ItOpsKiroPermissions.ps1 -Remove
+```
+
+An unrecognized tool added by a later Kiro, vendor MCP, or harness release remains subject to confirmation until its exact read-only name is reviewed and added. This is intentional: approval suppression must not become wildcard trust.
+
+### Update another PC from GitHub
+
+From that PC's existing clone:
+
+```powershell
+git switch main
+git pull --ff-only origin main
+.\scripts\Install-ItOps.ps1
+```
+
+The ignored `config\itops.env` and private `wiki\` content remain local. Re-running the installer updates dependencies, rebuilds the MCP servers, revalidates the harness, and safely reconciles that PC's exact Kiro permissions. Start a new Kiro chat after an update that changes agents, hooks, MCP schemas, or permissions.
 
 ## Connect every system
 
@@ -406,7 +441,7 @@ The guarantee is layered:
 2. no mutating MCP tool surfaces
 3. Kerberos/SSO helpers without a shell, SQL replica proof, and conservative SQL/SPL/Mongo/Argo allowlists
 4. TLS, timeout, row/document/byte, and pool bounds
-5. Kiro v3 permissions denying shell and filesystem writes
+5. machine-local exact Kiro v3 trust for ITOps subagents/MCP tool names plus agent rules denying shell and filesystem writes
 6. a blocking v3 `PreToolUse` hook
 
 Prompts are not considered a security boundary. External credentials remain the final authority, so never reuse an admin token.

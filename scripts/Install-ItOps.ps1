@@ -47,6 +47,11 @@ if ($LASTEXITCODE -ne 0) { throw "npm ci failed." }
 & npm run verify
 if ($LASTEXITCODE -ne 0) { throw "Harness verification failed." }
 
+& (Join-Path $PSScriptRoot "Set-ItOpsKiroPermissions.ps1")
+if ($LASTEXITCODE -ne 0) {
+    throw "Kiro's machine-local ITOps permissions could not be configured."
+}
+
 Get-ChildItem -LiteralPath ".kiro\agents" -Filter "*.md" | ForEach-Object {
     & kiro-cli agent validate --path $_.FullName
     if ($LASTEXITCODE -ne 0) { throw "Kiro rejected agent profile $($_.Name)." }
@@ -67,6 +72,7 @@ try {
 
 Write-Host ""
 Write-Host "Installation complete."
+Write-Host "Kiro now trusts only the exact ITOps subagents and MCP tools (external reads plus constrained local report/XML writes)."
 Write-Host "1. Edit config\itops.env with read-only credentials."
 Write-Host "2. Run .\scripts\Initialize-ItOpsAuth.ps1 for Microsoft/Argo CD SSO."
 Write-Host "3. Run .\scripts\Test-ItOps.ps1."

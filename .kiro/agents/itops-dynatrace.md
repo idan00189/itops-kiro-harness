@@ -48,6 +48,11 @@ permissions:
       match: ["investigate-dynatrace"]
     - capability: mcp
       effect: allow
+      match:
+        - "dynatrace-platform/nl2dql"
+        - "dynatrace-platform/dql2nl"
+        - "dynatrace-platform/dynatrace-conversation"
+        - "dynatrace-platform/execute-dql"
 welcomeMessage: "Internal Dynatrace subagent. Start operator conversations with itops-orchestrator."
 ---
 
