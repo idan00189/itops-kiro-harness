@@ -19,6 +19,14 @@ const root = process.cwd();
 const runtime = process.argv.includes("--runtime");
 const errors: string[] = [];
 const warnings: string[] = [];
+const specialistAgents = [
+  "itops-splunk",
+  "itops-sql-server",
+  "itops-mongodb-docdb",
+  "itops-dynatrace",
+  "itops-argocd",
+  "itops-source-code",
+];
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -47,12 +55,7 @@ async function validateAgents(): Promise<void> {
   const directory = resolve(root, ".kiro/agents");
   const expected = new Set([
     "itops-orchestrator.md",
-    "itops-splunk.md",
-    "itops-sql-server.md",
-    "itops-mongodb-docdb.md",
-    "itops-dynatrace.md",
-    "itops-argocd.md",
-    "itops-source-code.md",
+    ...specialistAgents.map((name) => `${name}.md`),
   ]);
   const files = (await readdir(directory)).filter((file) => file.endsWith(".md"));
   check(files.length === expected.size, `Expected ${expected.size} agent profiles, found ${files.length}`);
@@ -60,7 +63,8 @@ async function validateAgents(): Promise<void> {
 
   for (const file of files) {
     try {
-      const config = frontmatter(await readFile(join(directory, file), "utf8"));
+      const profile = await readFile(join(directory, file), "utf8");
+      const config = frontmatter(profile);
       const tools = Array.isArray(config.tools) ? config.tools.map(String) : [];
       check(tools.includes("@mcp"), `${file}: tools must include @mcp`);
       check(config.includeMcpJson === false, `${file}: includeMcpJson must be false`);
@@ -70,6 +74,51 @@ async function validateAgents(): Promise<void> {
         file === "itops-orchestrator.md" ? tools.includes("subagent") : !tools.includes("subagent"),
         `${file}: invalid subagent capability`,
       );
+      if (file === "itops-orchestrator.md") {
+        const toolSettings = config.toolsSettings as
+          | {
+              subagent?: {
+                availableAgents?: unknown[];
+                trustedAgents?: unknown[];
+              };
+            }
+          | undefined;
+        const available = (toolSettings?.subagent?.availableAgents ?? []).map(String);
+        const trusted = (toolSettings?.subagent?.trustedAgents ?? []).map(String);
+        check(
+          available.length === specialistAgents.length &&
+            specialistAgents.every((name) => available.includes(name)),
+          `${file}: availableAgents must contain only the six ITOps specialists`,
+        );
+        check(
+          trusted.length === specialistAgents.length &&
+            specialistAgents.every((name) => trusted.includes(name)),
+          `${file}: trustedAgents must contain only the six read-only ITOps specialists`,
+        );
+        const resources = Array.isArray(config.resources) ? config.resources : [];
+        const wikiKnowledgeBase = resources.find(
+          (resource) =>
+            resource &&
+            typeof resource === "object" &&
+            !Array.isArray(resource) &&
+            (resource as Record<string, unknown>).type === "knowledgeBase" &&
+            (resource as Record<string, unknown>).name === "ITOpsWiki",
+        ) as Record<string, unknown> | undefined;
+        check(wikiKnowledgeBase?.source === "file://wiki", `${file}: missing ITOpsWiki source`);
+        check(wikiKnowledgeBase?.indexType === "best", `${file}: ITOpsWiki must use best indexing`);
+        check(wikiKnowledgeBase?.autoUpdate === true, `${file}: ITOpsWiki must auto-update`);
+        check(
+          !resources.some(
+            (resource) => typeof resource === "string" && resource.includes("wiki/**/*.md"),
+          ),
+          `${file}: wiki must be indexed, not injected eagerly`,
+        );
+      } else {
+        check(
+          profile.includes("internal, non-user-facing"),
+          `${file}: specialist must identify itself as an internal subagent`,
+        );
+      }
       const servers =
         config.mcpServers && typeof config.mcpServers === "object"
           ? Object.keys(config.mcpServers as Record<string, unknown>)
@@ -184,6 +233,7 @@ async function validateLayout(): Promise<void> {
     ".kiro/steering/product.md",
     ".kiro/steering/tech.md",
     ".kiro/steering/structure.md",
+    ".kiro/steering/wiki-policy.md",
     ".kiro/specs/itops-harness/requirements.md",
     ".kiro/specs/itops-harness/design.md",
     ".kiro/specs/itops-harness/tasks.md",
@@ -194,6 +244,7 @@ async function validateLayout(): Promise<void> {
     "dist/mcp/dynatrace.js",
     "dist/mcp/argocd.js",
     "dist/mcp/source-code.js",
+    ".kiro/skills/itops-orchestrate/references/wiki-evidence.md",
   ];
   for (const path of required) check(await exists(resolve(root, path)), `Missing required path ${path}`);
   const envFiles = (await readdir(resolve(root, "config"))).filter((file) => /\.env(?:\.example)?$/i.test(file));
@@ -201,6 +252,9 @@ async function validateLayout(): Promise<void> {
     envFiles.every((file) => ["itops.env", "itops.env.example"].includes(file)),
     `Unexpected environment file(s): ${envFiles.join(", ")}`,
   );
+  const gitignore = await readFile(resolve(root, ".gitignore"), "utf8");
+  check(gitignore.includes("wiki/*"), "Private wiki contents must be ignored by Git");
+  check(gitignore.includes("!wiki/.gitkeep"), "wiki/.gitkeep must remain tracked");
 }
 
 function requireVariables(names: string[]): void {

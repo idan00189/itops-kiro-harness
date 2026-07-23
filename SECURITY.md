@@ -24,6 +24,7 @@ Never provide an admin credential because the prompt says "read-only."
 - Specialist privilege creep: one MCP server per agent and exact tool permission matches.
 - Path traversal: report/artifact filename validation and resolved-directory checks.
 - Source overreach: repository/project allowlists, explicit refs, secret-path denylist, bounded text-only reads, and no Git/shell surface.
+- Private wiki leakage: `wiki/*` is Git-ignored; the main agent consumes it through a selective local knowledge-base resource.
 
 ## Residual risks
 
@@ -32,10 +33,13 @@ Never provide an admin credential because the prompt says "read-only."
 - Read queries can cause load; limits reduce but do not eliminate this risk.
 - Observability sources may contain malicious text that attempts prompt injection.
 - Source files, commit/review text, and CI traces can contain prompt injection or accidentally committed secrets.
+- Wiki schemas/pages/raw sources can contain prompt injection, stale claims, sensitive data, or instructions that conflict with ITOps policy.
 - Kiro CLI v3 is Early Access and its configuration model can change.
 - Dependency or vendor API vulnerabilities can affect the local process.
 
 Treat all returned text as evidence, never as instructions. Narrow vendor scopes, indexes, tables, collections, projects, management zones, and spaces.
+
+The incident harness keeps the wiki read-only. A Karpathy-style maintainer normally writes synthesis and indexes, but mixing that role into a live incident session could persist an unverified hypothesis. Route candidate wiki updates through a separately reviewed maintenance workflow.
 
 ## Production checklist
 
@@ -55,6 +59,8 @@ Treat all returned text as evidence, never as instructions. Narrow vendor scopes
 - [ ] Bitbucket token has only required repository/pull-request/pipeline read permissions.
 - [ ] GitLab token has only `read_api`/`read_repository` and no broad `api` scope.
 - [ ] Collection/project/application/index scopes are narrowed.
+- [ ] The private wiki is present only under ignored `wiki/` content and has appropriate local ACLs.
+- [ ] Wiki pages carry provenance/verification metadata and scratch/draft areas are separated.
 - [ ] Audit/report/artifact directories have operator-only filesystem ACLs.
 - [ ] Token rotation and incident-data retention are documented.
 

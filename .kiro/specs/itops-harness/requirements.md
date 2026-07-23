@@ -5,8 +5,14 @@
 WHEN Kiro CLI v3 loads the workspace  
 THE SYSTEM SHALL expose one ITOps orchestrator and six specialist agents for Splunk, SQL Server, MongoDB/DocumentDB, Dynatrace, Argo CD, and Bitbucket/GitLab source code.
 
-WHEN the orchestrator investigates an incident  
+WHEN the orchestrator investigates an incident
 THE SYSTEM SHALL delegate observability and deployment checks before targeted database checks.
+
+WHEN the operator starts ITOps
+THE SYSTEM SHALL expose the orchestrator as the sole conversational front door and restrict internal delegation to the six named custom specialists.
+
+WHEN a private wiki is present
+THE SYSTEM SHALL index it selectively, search maintained synthesis before immutable sources, keep it read-only, and prevent its contents from entering Git.
 
 WHEN source-code analysis is justified
 THE SYSTEM SHALL require an allowlisted repository/project and exact deployed revision before targeted commit, diff, review, file, or CI reads.

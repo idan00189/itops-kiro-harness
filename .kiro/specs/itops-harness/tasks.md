@@ -11,6 +11,8 @@
 - [x] Implement the Argo CD read-only MCP server.
 - [x] Implement the Bitbucket/GitLab read-only source investigation MCP server.
 - [x] Create seven Kiro v3 agent profiles and seven Agent Skills.
+- [x] Make the orchestrator the sole user-facing agent and allow/trust only the six custom specialists.
+- [x] Add private Karpathy-style wiki indexing, provenance policy, and Git-leak protection.
 - [x] Add v3 hooks, steering, AGENTS.md, and the empty wiki folder.
 - [x] Add one environment template and Windows PowerShell workflows.
 - [x] Install pinned dependencies and produce the lockfile.

@@ -10,7 +10,7 @@
 - `src/report/` — Hebrew Markdown and RTL HTML report model/rendering
 - `config/itops.env.example` — the single environment template
 - `scripts/` — Windows install/start/test and hook commands
-- `wiki/` — intentionally empty company knowledge folder
+- `wiki/` — intentionally empty, Git-ignored private knowledge base indexed only by the orchestrator
 - `reports/`, `artifacts/`, `audit/` — ignored local runtime outputs
 
 Do not place runtime secrets in `.kiro/`, skills, steering, specs, docs, or source files.

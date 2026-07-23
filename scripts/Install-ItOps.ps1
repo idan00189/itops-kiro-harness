@@ -55,7 +55,8 @@ Get-ChildItem -LiteralPath ".kiro\agents" -Filter "*.md" | ForEach-Object {
 if ($ConfigureKiroSettings) {
     & kiro-cli settings chat.enableKnowledge true
     & kiro-cli settings toolSearch.enabled true
-    Write-Host "Enabled Kiro knowledge and on-demand MCP Tool Search in your user settings."
+    & kiro-cli settings --workspace chat.disableInheritingDefaultResources true
+    Write-Host "Enabled Kiro knowledge, on-demand MCP Tool Search, and isolated custom-agent resources."
 }
 
 try {

@@ -10,6 +10,8 @@ artifacts/splunk/*
 !artifacts/splunk/.gitkeep
 audit/*
 !audit/.gitkeep
+wiki/*
+!wiki/.gitkeep
 *.log
 *.pem
 *.key

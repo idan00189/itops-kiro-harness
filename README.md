@@ -16,7 +16,7 @@ The orchestrator produces a detailed Hebrew Markdown report by default. It can p
 | `itops-argocd` | `itops-argocd` | applications, health/sync state, resource tree, drift, events |
 | `itops-source-code` | `itops-source-code` | allowlisted Bitbucket/GitLab trees, files, commits, diffs, reviews, and CI evidence |
 
-Each agent has a portable Agent Skill, its own inline stdio MCP server, exact MCP permission matches, no generic read/shell/write/web tools, no inherited global/workspace MCP configuration, persistent steering, and v3 hooks. The empty `wiki/` folder is ready for your internal Markdown knowledge.
+Each agent has a portable Agent Skill, its own inline stdio MCP server, exact MCP permission matches, no generic read/shell/write/web tools, no inherited global/workspace MCP configuration, persistent steering, and v3 hooks. The empty, Git-ignored `wiki/` folder is ready for a private Karpathy-style knowledge base.
 
 ## Prerequisites
 
@@ -76,6 +76,23 @@ Produce the default Hebrew Markdown report.
 
 Press `Ctrl+G` to monitor Kiro subagents. Use `/context show` to verify loaded skills/resources and `/mcp` to inspect the active server. Generated reports appear in `reports/`; generated Splunk XML proposals appear in `artifacts/splunk/`.
 
+`Start-ItOps.ps1` always starts `itops-orchestrator`. Talk only to that main agent; do not switch to a specialist. The orchestrator alone can spawn the six named, trusted, read-only specialists and automatically receives their summaries.
+
+## Private wiki
+
+Place your existing wiki tree inside `wiki/`. Its contents are excluded from Git so they cannot be accidentally added to this public repository; only `wiki/.gitkeep` is tracked.
+
+The orchestrator registers the folder as the indexed `ITOpsWiki` knowledge base with high-quality indexing and automatic refresh. This supports a large wiki without injecting every page into each incident context.
+
+For a Karpathy-style layout, keep your existing separation:
+
+- immutable raw sources
+- maintained, cross-linked wiki synthesis
+- schema/instructions defining page conventions
+- `index.md` and `log.md`
+
+The orchestrator searches the maintained wiki and index first, follows provenance to raw sources when necessary, ignores scratch/drafts/inbox by default, and treats all wiki content as untrusted documentation. This incident harness never edits or lints the wiki; proposed corrections are written into the report for a separately approved maintenance workflow.
+
 ## Investigation flow
 
 The orchestrator uses two evidence waves:
@@ -116,7 +133,7 @@ For Kiro user settings, the installer has an optional switch:
 .\scripts\Install-ItOps.ps1 -ConfigureKiroSettings
 ```
 
-It enables knowledge and on-demand MCP Tool Search. Tool Search is optional because each specialist already sees only a small MCP surface.
+It enables knowledge and on-demand MCP Tool Search. Tool Search is optional because each specialist already sees only a small MCP surface. It also disables inherited default resources for this workspace, so custom agents receive only the explicitly configured ITOps resources.
 
 ## Documentation
 
@@ -135,12 +152,14 @@ It enables knowledge and on-demand MCP Tool Search. Tool Search is optional beca
 - GitLab project blob search can be unavailable by tier/configuration; targeted tree and file reads remain available.
 - Splunk Simple XML is generated offline because uploading it would violate external read-only access.
 - A healthy observability result can mean missing telemetry. Reports must preserve retention, sampling, clock, and replica-lag gaps.
+- The wiki is documentation context, not proof of current runtime state; stale or unverified pages must be reported as limitations.
 
 ## Primary references
 
 Research was checked on 2026-07-23 against primary vendor documentation:
 
-- [Kiro CLI 3.0](https://kiro.dev/docs/cli/v3/), [agent config](https://kiro.dev/docs/cli/v3/agent-config/), [permissions](https://kiro.dev/docs/cli/v3/permissions/), [hooks](https://kiro.dev/docs/cli/v3/hooks/), [skills](https://kiro.dev/docs/cli/skills/), [subagents](https://kiro.dev/docs/cli/chat/subagents/), and [specs](https://kiro.dev/docs/cli/v3/specs/)
+- [Kiro CLI 3.0](https://kiro.dev/docs/cli/v3/), [agent config and knowledge-base resources](https://kiro.dev/docs/cli/custom-agents/configuration-reference/), [permissions](https://kiro.dev/docs/cli/v3/permissions/), [hooks](https://kiro.dev/docs/cli/v3/hooks/), [skills](https://kiro.dev/docs/cli/skills/), [subagents](https://kiro.dev/docs/cli/chat/subagents/), and [specs](https://kiro.dev/docs/cli/v3/specs/)
+- [Andrej Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
 - [Splunk search REST endpoints](https://help.splunk.com/en/splunk-enterprise/leverage-rest-apis/rest-api-reference/9.4/search-endpoints/search-endpoint-descriptions) and [Simple XML reference](https://help.splunk.com/en/splunk-enterprise/create-dashboards-and-reports/simple-xml-dashboards/9.0/simple-xml-reference/simple-xml-reference)
 - [SQL Server read-only routing](https://learn.microsoft.com/en-us/sql/database-engine/availability-groups/windows/listeners-client-connectivity-application-failover) and [Tedious read-only intent](https://tediousjs.github.io/tedious/api-connection.html)
 - [MongoDB read preference](https://www.mongodb.com/docs/manual/core/read-preference/) and [Amazon DocumentDB RBAC](https://docs.aws.amazon.com/documentdb/latest/developerguide/role_based_access_control.html)

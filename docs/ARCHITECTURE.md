@@ -4,7 +4,7 @@
 
 The harness uses workspace Markdown profiles in `.kiro/agents/`. Every profile embeds exactly one MCP server. There is no workspace-global `mcp.json`, so a specialist cannot inherit unrelated database or operations tools.
 
-The orchestrator is the only agent with `subagent`. Its permission matches only the six named specialists. Specialists cannot spawn agents.
+The orchestrator is the only user-facing agent and the only profile with `subagent`. Both Kiro `availableAgents`/`trustedAgents` and capability permissions restrict delegation to the six named read-only specialists. Specialists cannot spawn agents and return their summaries to the orchestrator.
 
 ```mermaid
 sequenceDiagram
@@ -14,9 +14,11 @@ sequenceDiagram
     participant DB as SQL + Mongo/DocDB
     participant Code as Bitbucket/GitLab source
     participant Core as Jira + Confluence + report
+    participant Wiki as Indexed private ITOpsWiki
     User->>O: Incident contract
     par Context
-        O->>Core: Wiki/Jira/Confluence reads
+        O->>Wiki: Selective knowledge search
+        O->>Core: Jira/Confluence reads
     and Wave 1
         O->>Obs: Parallel bounded investigations
     end
@@ -41,14 +43,22 @@ sequenceDiagram
 | capability permissions | exact MCP tool matches and denied shell/fs_write/web |
 | standalone v1 hooks | session policy, pre-tool blocker, post-tool audit, manual report QA |
 | custom subagents | isolated observability, data, deployment, and source investigations |
+| subagent allow/trust lists | only the six custom ITOps specialists can run; no default general-purpose subagent |
 | Agent Skills | progressive domain playbooks and references |
 | steering + AGENTS.md | persistent safety, product, structure, and reporting policy |
 | knowledge | local wiki and Markdown workspace context |
+| indexed knowledge-base resource | large private wiki searched incrementally with `best` indexing and `autoUpdate` |
 | Specs | requirements/design/task history in `.kiro/specs/itops-harness/` |
 | MCP startup gate | start fails when configured servers do not initialize |
 | hot reload | Kiro picks up agent/MCP profile edits at idle boundaries |
 
 Kiro Tool Search is optional. The installer can enable it, but the agent-specific tool surfaces are already small. No model is pinned so the harness can use the model your Kiro organization permits.
+
+## Wiki trust and scale
+
+The main profile registers `wiki/` as `ITOpsWiki` instead of expanding `wiki/**/*.md` as eager resources. Kiro knowledge-base resources support large indexed content with incremental loading, avoiding full-wiki context injection.
+
+The orchestrator follows Karpathy-style separation between immutable sources, maintained synthesis, and schema. It uses the maintained index first and cites wiki provenance as `WIKI-NNN`. Wiki text can guide navigation but cannot override ITOps policy or establish current production state. The incident harness has no wiki write capability.
 
 ## MCP implementation
 

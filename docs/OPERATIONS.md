@@ -8,6 +8,8 @@ Run:
 .\scripts\Start-ItOps.ps1
 ```
 
+This command always opens `itops-orchestrator`. Keep the conversation there. Do not run or switch to `itops-splunk`, `itops-dynatrace`, or another specialist; the orchestrator selects and coordinates them internally.
+
 Provide:
 
 - incident ID and severity
@@ -29,6 +31,23 @@ If a value is unknown, say so. Do not substitute an assumed environment silently
 - `/spec itops-harness` opens the implementation spec.
 
 Kiro v3 sessions are not resumable in v2. Keep v3 enabled for this workspace.
+
+## Add the private wiki
+
+Copy your existing Karpathy-style wiki under `wiki\`:
+
+```text
+wiki\
+  sources\          immutable originals
+  wiki\             maintained synthesis, if your layout nests it
+  index.md          or wiki\index.md
+  log.md
+  AGENTS.md         or another wiki schema
+```
+
+Keep your existing paths and schema; the harness does not require renaming pages. Wiki contents are Git-ignored and are indexed locally as `ITOpsWiki` when the orchestrator starts.
+
+The incident workflow is query-only. It searches maintained/index pages before raw sources, records `WIKI-NNN` citations, ignores scratch/drafts/inbox by default, and does not ingest or update the wiki. Review proposed wiki corrections from the final report in your separate maintenance workflow.
 
 ## Expected investigation pattern
 
@@ -103,5 +122,7 @@ Kiro hot-reloads agent/MCP profile edits, but dependency or compiled server chan
 - HTTP 401/403: verify the read-only token and resource permission.
 - Empty evidence: check window, timezone, retention, sampling, index/collection/project/repository allowlist, revision mapping, and replica lag.
 - Subagent fails immediately: verify its exact MCP permission rules and server startup.
+- Wiki result is missing: confirm the files are under `wiki\`, restart the Kiro session to refresh the auto-updated index, and inspect `/context show`.
+- Wiki result is stale or contradictory: preserve the conflict in the report and verify against immutable source/runtime evidence; do not silently edit the wiki.
 - Kiro environment issue: run `kiro-cli diagnostic`; some releases expose the older `kiro-cli doctor` name.
 - Windows logs: Kiro writes under `%TEMP%\kiro-log\logs\kiro-chat.log`.
