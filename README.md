@@ -40,6 +40,8 @@ Kiro CLI v3 is currently Early Access and must run in the terminal UI with `--v3
 
 ## Install
 
+For fresh installation, updates on another PC, the one-time Kiro permission setup, and repeated-approval troubleshooting, follow the [Windows installation and update guide](docs/INSTALLATION.md).
+
 From this repository:
 
 ```powershell
@@ -464,6 +466,7 @@ It enables knowledge and on-demand MCP Tool Search. Tool Search is optional beca
 
 ## Documentation
 
+- [Windows installation and update guide](docs/INSTALLATION.md)
 - [Architecture and Kiro v3 features](docs/ARCHITECTURE.md)
 - [Windows authentication and Microsoft SSO](docs/AUTHENTICATION.md)
 - [Read-only identity setup](docs/READ_ONLY_SETUP.md)
