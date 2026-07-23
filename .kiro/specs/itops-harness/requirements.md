@@ -3,10 +3,13 @@
 ## Agent architecture
 
 WHEN Kiro CLI v3 loads the workspace  
-THE SYSTEM SHALL expose one ITOps orchestrator and five specialist agents for Splunk, SQL Server, MongoDB/DocumentDB, Dynatrace, and Argo CD.
+THE SYSTEM SHALL expose one ITOps orchestrator and six specialist agents for Splunk, SQL Server, MongoDB/DocumentDB, Dynatrace, Argo CD, and Bitbucket/GitLab source code.
 
 WHEN the orchestrator investigates an incident  
 THE SYSTEM SHALL delegate observability and deployment checks before targeted database checks.
+
+WHEN source-code analysis is justified
+THE SYSTEM SHALL require an allowlisted repository/project and exact deployed revision before targeted commit, diff, review, file, or CI reads.
 
 WHEN a specialist is spawned  
 THE SYSTEM SHALL expose only that specialist's read-only MCP server and workspace reading capabilities.
@@ -18,6 +21,9 @@ THE SYSTEM SHALL enforce least privilege in credentials, MCP implementation, Kir
 
 WHEN a query attempts a mutation, side effect, unbounded result, disabled integration, unsafe URL, or disallowed scope  
 THE SYSTEM SHALL reject it before external execution.
+
+WHEN a source request targets a disallowed repository, unsafe ref, secret-bearing path, binary file, oversized response, or cross-origin link
+THE SYSTEM SHALL reject it before returning repository content.
 
 WHEN reports, XML proposals, or audit records are created  
 THE SYSTEM SHALL write only to their dedicated local directories.

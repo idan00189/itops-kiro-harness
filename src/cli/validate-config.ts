@@ -6,8 +6,14 @@ import {
   enabled,
   env,
   envBoolean,
+  envCsv,
+  envInteger,
   requireSafeBaseUrl,
 } from "../common/env.js";
+import {
+  assertBitbucketRepository,
+  assertGitLabProject,
+} from "../common/source-guards.js";
 
 const root = process.cwd();
 const runtime = process.argv.includes("--runtime");
@@ -46,6 +52,7 @@ async function validateAgents(): Promise<void> {
     "itops-mongodb-docdb.md",
     "itops-dynatrace.md",
     "itops-argocd.md",
+    "itops-source-code.md",
   ]);
   const files = (await readdir(directory)).filter((file) => file.endsWith(".md"));
   check(files.length === expected.size, `Expected ${expected.size} agent profiles, found ${files.length}`);
@@ -107,6 +114,7 @@ async function validateSkills(): Promise<void> {
     "investigate-mongodb-docdb",
     "investigate-dynatrace",
     "investigate-argocd",
+    "investigate-source-code",
   ]);
   const directories = (await readdir(directory, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
@@ -185,6 +193,7 @@ async function validateLayout(): Promise<void> {
     "dist/mcp/mongodb-docdb.js",
     "dist/mcp/dynatrace.js",
     "dist/mcp/argocd.js",
+    "dist/mcp/source-code.js",
   ];
   for (const path of required) check(await exists(resolve(root, path)), `Missing required path ${path}`);
   const envFiles = (await readdir(resolve(root, "config"))).filter((file) => /\.env(?:\.example)?$/i.test(file));
@@ -274,6 +283,79 @@ function validateRuntime(): void {
       }
       if (env("ARGOCD_APPLICATION_ALLOWLIST", { defaultValue: "*", allowPlaceholder: true }) === "*") {
         warnings.push("ARGOCD_APPLICATION_ALLOWLIST=*; narrow it when possible");
+      }
+    }
+    if (enabled("SOURCE_CODE")) {
+      const bitbucketEnabled = enabled("BITBUCKET");
+      const gitlabEnabled = enabled("GITLAB");
+      if (!bitbucketEnabled && !gitlabEnabled) {
+        errors.push("ITOPS_ENABLE_SOURCE_CODE=true requires Bitbucket and/or GitLab");
+      }
+      const sourceMax = envInteger("SOURCE_CODE_MAX_FILE_BYTES", 250_000, 1_000, 2_000_000);
+      const httpMax = envInteger(
+        "ITOPS_MAX_HTTP_RESPONSE_BYTES",
+        5_000_000,
+        10_000,
+        50_000_000,
+      );
+      if (sourceMax > httpMax) {
+        errors.push("SOURCE_CODE_MAX_FILE_BYTES must not exceed ITOPS_MAX_HTTP_RESPONSE_BYTES");
+      }
+      if (bitbucketEnabled) {
+        requireVariables([
+          "BITBUCKET_BASE_URL",
+          "BITBUCKET_API_TOKEN",
+          "BITBUCKET_REPOSITORY_ALLOWLIST",
+          "BITBUCKET_HEALTH_REPOSITORY",
+        ]);
+        safeUrl("BITBUCKET_BASE_URL");
+        const mode = env("BITBUCKET_AUTH_MODE", {
+          defaultValue: "bearer",
+          allowPlaceholder: true,
+        }).toLowerCase();
+        if (!["bearer", "basic"].includes(mode)) {
+          errors.push("BITBUCKET_AUTH_MODE must be bearer or basic");
+        }
+        if (mode === "basic") requireVariables(["BITBUCKET_EMAIL"]);
+        const allowlist = envCsv("BITBUCKET_REPOSITORY_ALLOWLIST");
+        if (allowlist.includes("*")) {
+          warnings.push("BITBUCKET_REPOSITORY_ALLOWLIST=*; narrow it for least privilege");
+        }
+        const healthParts = env("BITBUCKET_HEALTH_REPOSITORY", { required: true }).split("/");
+        if (healthParts.length !== 2 || !healthParts[0] || !healthParts[1]) {
+          errors.push("BITBUCKET_HEALTH_REPOSITORY must be workspace/repository");
+        } else {
+          try {
+            assertBitbucketRepository(healthParts[0], healthParts[1], allowlist);
+          } catch (error) {
+            errors.push(error instanceof Error ? error.message : String(error));
+          }
+        }
+      }
+      if (gitlabEnabled) {
+        requireVariables([
+          "GITLAB_BASE_URL",
+          "GITLAB_TOKEN",
+          "GITLAB_PROJECT_ALLOWLIST",
+          "GITLAB_HEALTH_PROJECT",
+        ]);
+        safeUrl("GITLAB_BASE_URL");
+        const mode = env("GITLAB_AUTH_MODE", {
+          defaultValue: "private-token",
+          allowPlaceholder: true,
+        }).toLowerCase();
+        if (!["private-token", "bearer"].includes(mode)) {
+          errors.push("GITLAB_AUTH_MODE must be private-token or bearer");
+        }
+        const allowlist = envCsv("GITLAB_PROJECT_ALLOWLIST");
+        if (allowlist.includes("*")) {
+          warnings.push("GITLAB_PROJECT_ALLOWLIST=*; narrow it for least privilege");
+        }
+        try {
+          assertGitLabProject(env("GITLAB_HEALTH_PROJECT", { required: true }), allowlist);
+        } catch (error) {
+          errors.push(error instanceof Error ? error.message : String(error));
+        }
       }
     }
   } catch (error) {

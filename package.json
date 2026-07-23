@@ -1,6 +1,6 @@
 {
   "name": "itops-kiro-harness",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "Read-only, multi-agent ITOps investigation harness for Kiro CLI v3",

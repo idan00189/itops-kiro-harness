@@ -1,0 +1,4 @@
+interface:
+  display_name: "Investigate Source Code"
+  short_description: "Correlate incidents with repository changes"
+  default_prompt: "Use $investigate-source-code to trace an incident to relevant Bitbucket or GitLab code changes."

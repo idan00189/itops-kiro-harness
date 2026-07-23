@@ -1,6 +1,6 @@
 ---
 name: itops-orchestrate
-description: Coordinate production mobile-app incident investigations across Splunk, SQL Server, MongoDB/DocumentDB, Dynatrace, Argo CD, Jira, Confluence, and a local wiki; correlate evidence and write a detailed Hebrew Markdown or HTML report. Use for incidents, outages, latency, errors, data inconsistencies, failed deployments, regressions, and cross-system root-cause analysis.
+description: Coordinate production mobile-app incident investigations across Splunk, SQL Server, MongoDB/DocumentDB, Dynatrace, Argo CD, Bitbucket/GitLab source code, Jira, Confluence, and a local wiki; correlate evidence and write a detailed Hebrew Markdown or HTML report. Use for incidents, outages, latency, errors, data inconsistencies, failed deployments, regressions, and cross-system root-cause analysis.
 ---
 
 # Orchestrate an ITOps investigation
@@ -31,13 +31,15 @@ Read [investigation-contract.md](references/investigation-contract.md) before de
 5. Delegate wave 2 only where justified:
    - `itops-sql-server`: targeted replica-backed relational checks.
    - `itops-mongodb-docdb`: targeted document-state checks.
-6. If sources disagree, preserve the disagreement and investigate clock skew, retention, sampling, replica lag, and scope mismatch.
+   - `itops-source-code`: targeted Bitbucket/GitLab inspection only after runtime or Argo CD evidence provides the repository/project and exact deployed revision.
+6. Give the source specialist the deployed SHA, runtime/deployment evidence IDs, affected symbol/path when known, and one causal question. Never substitute `HEAD`, `main`, or a default branch for a missing production revision.
+7. If sources disagree, preserve the disagreement and investigate clock skew, retention, sampling, replica lag, and scope mismatch.
 
 Give every delegated task: incident ID, UTC interval, baseline interval, environment, service/application scope, known identifiers, one precise question, forbidden data, and required output.
 
 ## Maintain evidence discipline
 
-Assign immutable evidence IDs such as `SPL-001`, `DT-001`, `ARGO-001`, `SQL-001`, `MDB-001`, `JIRA-001`, and `CONF-001`.
+Assign immutable evidence IDs such as `SPL-001`, `DT-001`, `ARGO-001`, `SQL-001`, `MDB-001`, `CODE-001`, `JIRA-001`, and `CONF-001`.
 
 For every item record:
 

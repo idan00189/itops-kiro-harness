@@ -14,8 +14,10 @@ flowchart TD
     S3 --> M3["Argo CD MCP"]
     O --> S4["itops-sql-server"]
     O --> S5["itops-mongodb-docdb"]
+    O --> S6["itops-source-code"]
     S4 --> M4["SQL Server MCP"]
     S5 --> M5["MongoDB/DocDB MCP"]
+    S6 --> M6["Bitbucket/GitLab MCP"]
     C --> R["Hebrew MD / optional RTL HTML"]
 ```
 
@@ -25,7 +27,7 @@ Each agent embeds one stdio MCP server. This prevents workspace-global MCP inher
 
 1. Vendor identity: read-only scopes/RBAC/roles.
 2. MCP surface: only read tools; report/XML writes are local and path constrained.
-3. Input guards: SQL/SPL/Mongo allowlists, DQL source allowlist, Argo project/app allowlists.
+3. Input guards: SQL/SPL/Mongo allowlists, DQL source allowlist, Argo project/app allowlists, source repository/project allowlists, safe refs, and secret-path denials.
 4. Runtime bounds: timeouts, rows/documents/bytes, pool limits, TLS verification.
 5. Kiro policy: tool tags, exact MCP permission matches, denied shell/fs_write/web.
 6. Hook policy: v3 `PreToolUse` blocking and metadata-only `PostToolUse` audit.

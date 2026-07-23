@@ -5,7 +5,7 @@
 - `.kiro/hooks/` — v3 standalone lifecycle and tool hooks
 - `.kiro/specs/itops-harness/` — requirements, design, and completed build tasks
 - `.kiro/steering/` — persistent product, technology, safety, and reporting context
-- `src/mcp/` — six MCP server entry points
+- `src/mcp/` — seven MCP server entry points
 - `src/common/` — guards, TLS-safe HTTP, audit, environment, and redaction
 - `src/report/` — Hebrew Markdown and RTL HTML report model/rendering
 - `config/itops.env.example` — the single environment template

@@ -46,6 +46,12 @@ const checks: Check[] = [
     serverPath: "dist/mcp/argocd.js",
     tool: "argocd_health",
   },
+  {
+    integration: "Bitbucket/GitLab source code",
+    enabledName: "SOURCE_CODE",
+    serverPath: "dist/mcp/source-code.js",
+    tool: "source_code_health",
+  },
 ];
 
 let failures = 0;
@@ -55,7 +61,7 @@ for (const check of checks) {
     continue;
   }
   const client = new Client(
-    { name: "itops-healthcheck", version: "1.0.0" },
+    { name: "itops-healthcheck", version: "1.1.0" },
     { capabilities: {} },
   );
   const transport = new StdioClientTransport({

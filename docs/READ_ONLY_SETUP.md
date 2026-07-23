@@ -103,6 +103,26 @@ For Cloud, use the user's email and API token with `ATLASSIAN_AUTH_MODE=basic`. 
 
 If using OAuth instead of an API token, request only classic read scopes such as `read:jira-work` and Confluence read scopes required by the chosen endpoints.
 
+## Bitbucket Cloud
+
+Prefer a dedicated repository or workspace access token restricted to the allowlisted repositories. The tools need only the read permissions used by the enabled evidence types:
+
+- repository read (`read:repository:bitbucket`) for trees, files, commits, and diffs
+- pull-request read (`read:pullrequest:bitbucket`) for review metadata and diffs
+- pipeline read (`read:pipeline:bitbucket`) for pipeline and step metadata
+
+For an Atlassian API token, set `BITBUCKET_AUTH_MODE=basic`, the Atlassian account email, and the token. For a repository/workspace access token, use `bearer`. Do not grant repository write/admin, pull-request write, webhook, runner, variable, or pipeline-control permissions.
+
+Some vendor read permissions cover more behavior than this harness needs. The source MCP therefore exposes only bounded HTTP GET operations and has no tools for clone, comment, approve, merge, trigger, retry, stop, or variable access. Set `BITBUCKET_REPOSITORY_ALLOWLIST` to explicit `workspace/repository` values and configure one included repository for the health check.
+
+## GitLab
+
+Use a dedicated project or group access token where possible, restricted to the allowlisted projects. Grant `read_api` and `read_repository` only; do not grant `api`, `write_repository`, runner administration, or owner/maintainer privileges.
+
+Set `GITLAB_BASE_URL` to the GitLab instance root, `GITLAB_AUTH_MODE=private-token`, and `GITLAB_TOKEN`. Bearer mode is available for an OAuth token with equivalent read-only authorization. Set `GITLAB_PROJECT_ALLOWLIST` to explicit numeric project IDs or `group/project` paths.
+
+The MCP exposes only bounded repository, commit, merge-request, pipeline, job, and trace reads. It cannot comment, approve, merge, trigger, retry, cancel, erase, or modify repository content. GitLab project blob search may require a particular tier/configuration; if unavailable, the investigation must use exact tree/file paths and record the gap.
+
 ## Rotation and revocation
 
 - rotate every token on your normal service-credential schedule

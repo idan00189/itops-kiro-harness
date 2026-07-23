@@ -7,7 +7,7 @@ Fill company-specific product, user-journey, ownership, severity, and SLO detail
 Primary outcomes:
 
 - establish what users experienced and when
-- correlate runtime, deployment, and data evidence
+- correlate runtime, deployment, source-change, CI, and data evidence
 - identify a defensible root-cause status
 - produce a detailed Hebrew report
 - recommend next actions without executing changes

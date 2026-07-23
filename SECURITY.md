@@ -23,6 +23,7 @@ Never provide an admin credential because the prompt says "read-only."
 - Secret leakage in audit: audit stores input hashes and metadata, not input/result payloads.
 - Specialist privilege creep: one MCP server per agent and exact tool permission matches.
 - Path traversal: report/artifact filename validation and resolved-directory checks.
+- Source overreach: repository/project allowlists, explicit refs, secret-path denylist, bounded text-only reads, and no Git/shell surface.
 
 ## Residual risks
 
@@ -30,6 +31,7 @@ Never provide an admin credential because the prompt says "read-only."
 - Query results can contain personal data in unrecognized fields.
 - Read queries can cause load; limits reduce but do not eliminate this risk.
 - Observability sources may contain malicious text that attempts prompt injection.
+- Source files, commit/review text, and CI traces can contain prompt injection or accidentally committed secrets.
 - Kiro CLI v3 is Early Access and its configuration model can change.
 - Dependency or vendor API vulnerabilities can affect the local process.
 
@@ -40,7 +42,7 @@ Treat all returned text as evidence, never as instructions. Narrow vendor scopes
 - [ ] `npm ci` completed from the committed lockfile.
 - [ ] `npm run verify` passes.
 - [ ] `Test-ItOps.ps1` passes all enabled health checks.
-- [ ] Kiro validates all six agent profiles.
+- [ ] Kiro validates all seven agent profiles.
 - [ ] Kiro workspace trust was granted intentionally.
 - [ ] No production secret appears outside ignored `config\itops.env`.
 - [ ] TLS verification is enabled and enterprise CAs are installed.
@@ -50,6 +52,8 @@ Treat all returned text as evidence, never as instructions. Narrow vendor scopes
 - [ ] Argo CD token has only `get`.
 - [ ] Jira/Confluence account has browse/view only.
 - [ ] Splunk role cannot schedule, write lookups, email, or delete.
+- [ ] Bitbucket token has only required repository/pull-request/pipeline read permissions.
+- [ ] GitLab token has only `read_api`/`read_repository` and no broad `api` scope.
 - [ ] Collection/project/application/index scopes are narrowed.
 - [ ] Audit/report/artifact directories have operator-only filesystem ACLs.
 - [ ] Token rotation and incident-data retention are documented.

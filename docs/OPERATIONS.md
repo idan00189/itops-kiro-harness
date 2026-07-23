@@ -34,12 +34,13 @@ Kiro v3 sessions are not resumable in v2. Keep v3 enabled for this workspace.
 
 Wave 1 runs Splunk, Dynatrace, and Argo CD in parallel. The orchestrator also searches Jira, Confluence, and `wiki/`.
 
-Wave 2 runs targeted SQL or Mongo/DocumentDB checks. Examples:
+Wave 2 runs targeted SQL, Mongo/DocumentDB, or source-code checks. Examples:
 
 - "For the 17 request IDs that failed in logs, what final order status exists?"
 - "Did documents created by app version 8.14.2 omit field X during the incident window?"
+- "Argo deployed GitLab commit `abc123` at 08:07Z and `DT-004` points to `CheckoutMapper.map`; did that commit change the implicated path, and did its pipeline test it?"
 
-Avoid questions like "find anything unusual in the database."
+Avoid questions like "find anything unusual in the database" or "search the repository for the bug." Source work requires the provider, allowlisted repository/project, exact deployed SHA, motivating evidence IDs, and a precise question.
 
 ## Reports
 
@@ -68,6 +69,14 @@ Set its switch in `config\itops.env`, for example:
 ITOPS_ENABLE_MONGODB=false
 ```
 
+To enable source investigation for only one provider:
+
+```text
+ITOPS_ENABLE_SOURCE_CODE=true
+ITOPS_ENABLE_BITBUCKET=false
+ITOPS_ENABLE_GITLAB=true
+```
+
 Run `Test-ItOps.ps1` again. Disabled systems are skipped in health checks and reported as evidence gaps.
 
 ## After configuration or upgrades
@@ -92,7 +101,7 @@ Kiro hot-reloads agent/MCP profile edits, but dependency or compiled server chan
 - MCP startup failure: run `npm run build`, then `npm run health`.
 - TLS failure: install/set the correct CA; never disable verification.
 - HTTP 401/403: verify the read-only token and resource permission.
-- Empty evidence: check window, timezone, retention, sampling, index/collection/project allowlist, and replica lag.
+- Empty evidence: check window, timezone, retention, sampling, index/collection/project/repository allowlist, revision mapping, and replica lag.
 - Subagent fails immediately: verify its exact MCP permission rules and server startup.
 - Kiro environment issue: run `kiro-cli diagnostic`; some releases expose the older `kiro-cli doctor` name.
 - Windows logs: Kiro writes under `%TEMP%\kiro-log\logs\kiro-chat.log`.

@@ -4,7 +4,7 @@
 
 The harness uses workspace Markdown profiles in `.kiro/agents/`. Every profile embeds exactly one MCP server. There is no workspace-global `mcp.json`, so a specialist cannot inherit unrelated database or operations tools.
 
-The orchestrator is the only agent with `subagent`. Its permission matches only the five named specialists. Specialists cannot spawn agents.
+The orchestrator is the only agent with `subagent`. Its permission matches only the six named specialists. Specialists cannot spawn agents.
 
 ```mermaid
 sequenceDiagram
@@ -12,6 +12,7 @@ sequenceDiagram
     participant O as ITOps orchestrator
     participant Obs as Splunk + Dynatrace + Argo CD
     participant DB as SQL + Mongo/DocDB
+    participant Code as Bitbucket/GitLab source
     participant Core as Jira + Confluence + report
     User->>O: Incident contract
     par Context
@@ -20,8 +21,12 @@ sequenceDiagram
         O->>Obs: Parallel bounded investigations
     end
     Obs-->>O: Evidence packages
-    O->>DB: Targeted follow-up questions
+    par Targeted follow-up
+        O->>DB: Data questions
+        O->>Code: Exact repo + deployed SHA + code question
+    end
     DB-->>O: Data-state evidence
+    Code-->>O: Commit/diff/review/CI evidence
     O->>Core: Structured Hebrew report
     Core-->>User: Markdown or RTL HTML
 ```
@@ -35,7 +40,7 @@ sequenceDiagram
 | inline MCP servers | portable agent-specific stdio processes |
 | capability permissions | exact MCP tool matches and denied shell/fs_write/web |
 | standalone v1 hooks | session policy, pre-tool blocker, post-tool audit, manual report QA |
-| custom subagents | isolated parallel observability investigations |
+| custom subagents | isolated observability, data, deployment, and source investigations |
 | Agent Skills | progressive domain playbooks and references |
 | steering + AGENTS.md | persistent safety, product, structure, and reporting policy |
 | knowledge | local wiki and Markdown workspace context |
@@ -58,9 +63,10 @@ Shared controls:
 - TLS verification; private CA support instead of insecure switches
 - tool annotations declaring external reads or narrow local writes
 - disabled MCP inheritance plus denied access to environment and audit files
+- source repository/project allowlists, immutable-ref validation, secret-path denylist, and bounded UTF-8 file reads
 
 ## Why custom MCP servers
 
-The harness does not use generic database, HTTP, kubectl, CLI, or shell MCP servers. A generic executor would make the read-only claim depend on prompt compliance. These MCP servers expose small vendor-specific operations and reject unsafe query forms before network execution.
+The harness does not use generic database, HTTP, Git, kubectl, CLI, or shell MCP servers. A generic executor would make the read-only claim depend on prompt compliance. These MCP servers expose small vendor-specific operations and reject unsafe query forms before network execution.
 
 The HTTP `POST` used by Splunk search export and Dynatrace DQL starts query work but does not persist configuration or production data. Credentials must still lack write scopes.

@@ -1,6 +1,6 @@
 # ITOps — Kiro CLI v3 incident investigation harness
 
-ITOps is a Windows-first, production-oriented multi-agent harness for investigating mobile-application incidents across Splunk, SQL Server, MongoDB/Amazon DocumentDB, Dynatrace, Argo CD, Jira, Confluence, and a local Markdown wiki.
+ITOps is a Windows-first, production-oriented multi-agent harness for investigating mobile-application incidents across Splunk, SQL Server, MongoDB/Amazon DocumentDB, Dynatrace, Argo CD, Bitbucket Cloud, GitLab, Jira, Confluence, and a local Markdown wiki.
 
 The orchestrator produces a detailed Hebrew Markdown report by default. It can produce a self-contained RTL HTML report when requested. It never performs remediation.
 
@@ -14,6 +14,7 @@ The orchestrator produces a detailed Hebrew Markdown report by default. It can p
 | `itops-mongodb-docdb` | `itops-mongodb-docdb` | bounded find, read-only aggregation, schema sample |
 | `itops-dynatrace` | `itops-dynatrace` | problems, entities, metrics, bounded Grail DQL |
 | `itops-argocd` | `itops-argocd` | applications, health/sync state, resource tree, drift, events |
+| `itops-source-code` | `itops-source-code` | allowlisted Bitbucket/GitLab trees, files, commits, diffs, reviews, and CI evidence |
 
 Each agent has a portable Agent Skill, its own inline stdio MCP server, exact MCP permission matches, no generic read/shell/write/web tools, no inherited global/workspace MCP configuration, persistent steering, and v3 hooks. The empty `wiki/` folder is ready for your internal Markdown knowledge.
 
@@ -47,8 +48,8 @@ The installer:
 
 1. checks Node, npm, and Kiro CLI
 2. installs pinned npm dependencies
-3. compiles and tests the six MCP servers
-4. validates all six skills and agent profiles
+3. compiles and tests the seven MCP servers
+4. validates all seven skills and agent profiles
 5. creates the ignored `config\itops.env` from the single template
 
 Edit `config\itops.env`. Do not put real secrets in `config\itops.env.example`.
@@ -80,9 +81,9 @@ Press `Ctrl+G` to monitor Kiro subagents. Use `/context show` to verify loaded s
 The orchestrator uses two evidence waves:
 
 1. Splunk, Dynatrace, and Argo CD run in parallel while the orchestrator searches Jira, Confluence, and the local wiki.
-2. SQL Server and MongoDB/DocumentDB receive targeted questions derived from wave 1.
+2. SQL Server and MongoDB/DocumentDB receive targeted questions derived from wave 1. The source-code specialist runs only when runtime or Argo CD evidence also identifies an allowlisted repository/project, the exact deployed revision, and a concrete code or CI question.
 
-This avoids broad database exploration and lets the orchestrator correlate timestamps, request/trace IDs, app versions, deployments, errors, latency, and data state. Every conclusion is classified as fact, inference, hypothesis, or recommendation.
+This avoids broad database and repository exploration and lets the orchestrator correlate timestamps, request/trace IDs, app versions, deployments, code changes, pipelines, errors, latency, and data state. Every conclusion is classified as fact, inference, hypothesis, or recommendation.
 
 ## Read-only guarantee and local-write exception
 
@@ -130,6 +131,8 @@ It enables knowledge and on-demand MCP Tool Search. Tool Search is optional beca
 - Kiro CLI v3 is Early Access; validate profiles again after Kiro upgrades.
 - Jira/Confluence defaults target Atlassian Cloud. Data Center uses bearer PAT and may require path changes in the environment file.
 - Argo CD endpoint availability is release-dependent; verify against your server's `/swagger-ui`.
+- Bitbucket support targets Bitbucket Cloud REST API 2.0. GitLab supports SaaS or self-managed instances whose REST API is available at `/api/v4`.
+- GitLab project blob search can be unavailable by tier/configuration; targeted tree and file reads remain available.
 - Splunk Simple XML is generated offline because uploading it would violate external read-only access.
 - A healthy observability result can mean missing telemetry. Reports must preserve retention, sampling, clock, and replica-lag gaps.
 
@@ -144,4 +147,6 @@ Research was checked on 2026-07-23 against primary vendor documentation:
 - [Dynatrace Problems API](https://docs.dynatrace.com/docs/dynatrace-api/environment-api/problems-v2/problems/get-problems-list), [Metrics API](https://docs.dynatrace.com/docs/dynatrace-api/environment-api/metric-v2), and [Grail Query API](https://developer.dynatrace.com/develop/platform-services/services/grail-service/)
 - [Argo CD API](https://argo-cd.readthedocs.io/en/stable/developer-guide/api-docs/) and [RBAC](https://argo-cd.readthedocs.io/en/stable/operator-manual/rbac/)
 - [Jira issue search](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/) and [Confluence CQL search](https://developer.atlassian.com/cloud/confluence/rest/v1/api-group-search/)
+- [Bitbucket source](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-source/), [commits](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-commits/), [pull requests](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-pullrequests/), and [pipelines](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-pipelines/)
+- [GitLab repository files](https://docs.gitlab.com/api/repository_files/), [repositories](https://docs.gitlab.com/api/repositories/), [commits](https://docs.gitlab.com/api/commits/), [merge requests](https://docs.gitlab.com/api/merge_requests/), [pipelines](https://docs.gitlab.com/api/pipelines/), and [jobs](https://docs.gitlab.com/api/jobs/)
 - [MCP TypeScript SDK v1](https://www.npmjs.com/package/@modelcontextprotocol/sdk); v1 remains the production line while v2 is still pre-stable
