@@ -1,0 +1,4 @@
+interface:
+  display_name: "Investigate Splunk"
+  short_description: "Investigate logs and draft Splunk dashboard XML"
+  default_prompt: "Investigate the supplied incident window in Splunk using read-only searches."

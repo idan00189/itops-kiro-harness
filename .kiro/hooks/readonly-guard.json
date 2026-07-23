@@ -1,0 +1,17 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "itops-readonly-pretool-guard",
+      "description": "Blocks built-in writes/shell and any unapproved mutation-shaped MCP tool.",
+      "trigger": "PreToolUse",
+      "matcher": ".*",
+      "action": {
+        "type": "command",
+        "command": "node scripts/hooks/readonly-guard.mjs"
+      },
+      "timeout": 5,
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "itops-session-policy",
+      "description": "Adds the cross-cutting evidence and safety contract at session start.",
+      "trigger": "SessionStart",
+      "action": {
+        "type": "agent",
+        "prompt": "Operate in external read-only mode. Normalize incident time to UTC, minimize personal data, use bounded queries, preserve negative and contradictory evidence, and never claim or execute remediation. Only local report/audit/XML artifact writes are allowed."
+      },
+      "enabled": true
+    }
+  ]
+}

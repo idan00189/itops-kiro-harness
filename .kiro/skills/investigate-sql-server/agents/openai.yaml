@@ -1,0 +1,4 @@
+interface:
+  display_name: "Investigate SQL Server"
+  short_description: "Query a SQL Server replica safely"
+  default_prompt: "Investigate this incident using bounded read-only SQL queries."

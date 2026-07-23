@@ -1,0 +1,17 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "itops-tool-audit",
+      "description": "Writes tool name/session metadata only; it never stores tool inputs or responses.",
+      "trigger": "PostToolUse",
+      "matcher": ".*",
+      "action": {
+        "type": "command",
+        "command": "node scripts/hooks/audit-tool.mjs"
+      },
+      "timeout": 5,
+      "enabled": true
+    }
+  ]
+}

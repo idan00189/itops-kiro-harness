@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "itops-manual-report-quality-check",
+      "description": "Manual second-pass checklist for the current incident report.",
+      "trigger": "Manual",
+      "action": {
+        "type": "agent",
+        "prompt": "Review the current incident findings before report_write. Verify Hebrew output, evidence IDs, UTC timestamps, query bounds, contradictory evidence, confidence calibration, limitations, and the explicit statement that no remediation was executed."
+      },
+      "enabled": true
+    }
+  ]
+}

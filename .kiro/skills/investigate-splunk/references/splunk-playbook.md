@@ -1,0 +1,33 @@
+# Splunk investigation patterns
+
+Use field names from the environment; these are patterns, not assumptions.
+
+## Rate and baseline
+
+```spl
+index=<index> service=<service> environment=<env>
+| timechart span=5m count AS requests count(eval(status>=500)) AS errors
+| eval error_rate=round(100*errors/requests,2)
+```
+
+## Error signatures
+
+```spl
+index=<index> service=<service> environment=<env> level IN (ERROR,FATAL)
+| stats count min(_time) AS first max(_time) AS last by error_code message_template
+| sort - count
+| head 20
+```
+
+## Cohort split
+
+```spl
+index=<index> service=<service> environment=<env>
+| stats count count(eval(is_error=1)) AS errors by app_version platform region
+| eval error_rate=round(100*errors/count,2)
+| sort - error_rate
+```
+
+Use indexed fields early. Avoid leading wildcards. Use `fields` to reduce returned data. For raw events, return a few representatives after aggregation.
+
+Simple XML uses `<dashboard version="1.1">`, rows, panels, visualization elements, and inline search elements. Prefer proven searches and bounded time ranges.

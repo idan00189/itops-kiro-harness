@@ -1,0 +1,4 @@
+interface:
+  display_name: "Investigate Dynatrace"
+  short_description: "Correlate Dynatrace problems metrics and DQL evidence"
+  default_prompt: "Investigate this incident in Dynatrace with read-only problem metric entity and DQL queries."
