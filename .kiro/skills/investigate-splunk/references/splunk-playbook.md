@@ -33,3 +33,11 @@ index=<index> service=<service> environment=<env>
 Use indexed fields early. Avoid leading wildcards. Use `fields` to reduce returned data. For raw events, return a few representatives after aggregation.
 
 Simple XML uses `<dashboard version="1.1">`, rows, panels, visualization elements, and inline search elements. Prefer proven searches and bounded time ranges.
+
+Pass dashboard panels through the flat `panelsJson` string argument. Example:
+
+```json
+[{"title":"Errors over time","search":"index=mobile service=api | timechart count by level","earliest":"-24h@h","latest":"now","visualization":"chart","chartType":"line"}]
+```
+
+The MCP server parses and strictly validates this JSON before generating XML. This flat public tool schema stays within model-provider function-declaration depth limits while retaining structured validation inside the server.

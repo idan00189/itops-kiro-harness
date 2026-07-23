@@ -11,6 +11,8 @@ Run:
 
 The authentication initializer reuses or opens Argo CD Microsoft SSO. Dynatrace OAuth opens in the browser when Kiro first starts that specialist. `Start-ItOps.ps1` runs the initializer automatically and always opens `itops-orchestrator`. Keep the conversation there. Do not run or switch to a specialist; the orchestrator selects and coordinates them internally.
 
+`Start-ItOps.ps1` first checks the current Windows user's exact Kiro permission allowlist. If it is missing or stale, the script stops before chat and tells you to run `.\scripts\Set-ItOpsKiroPermissions.ps1`. The installer normally performs this once per PC.
+
 The default interaction is an ordinary operational question. Examples:
 
 ```text
@@ -123,6 +125,7 @@ Run `Test-ItOps.ps1` again. Disabled systems are skipped in health checks and re
 Run:
 
 ```powershell
+.\scripts\Set-ItOpsKiroPermissions.ps1
 .\scripts\Test-ItOps.ps1
 ```
 
@@ -135,9 +138,13 @@ kiro-cli chat --v3 --agent itops-orchestrator --require-mcp-startup
 
 Kiro hot-reloads agent/MCP profile edits, but dependency or compiled server changes require `npm run build` and a session restart.
 
+Kiro keeps permissions in `%USERPROFILE%\.kiro\settings\permissions.yaml`, outside Git. Run the permission configurator after pulling a harness release that adds or renames tools. It preserves user rules and writes a timestamped backup before changing an existing file. `-Check`, `-DryRun`, and `-Remove` provide non-mutating validation, preview, and removal of only ITOps-managed rules.
+
 ## Troubleshooting
 
 - MCP startup failure: run `npm run build`, then `npm run health`.
+- Repeated subagent/tool approval: close the current chat, run `.\scripts\Set-ItOpsKiroPermissions.ps1 -Check`; if it reports missing entries, run the command without `-Check` and start a fresh chat. Do not solve this with `mcp:*`, shell, or filesystem wildcards.
+- `maximum allowed nesting depth` while calling Splunk: pull the current `main`, rerun `Install-ItOps.ps1`, and start a fresh chat. Version 1.3.1 exposes dashboard panels through the flat `panelsJson` argument so the entire Splunk MCP tool set stays inside provider schema-depth limits.
 - Splunk Kerberos failure: verify `curl.exe --version` lists SSPI/SPNEGO, the Windows ticket/SPN is valid, and the HTTPS endpoint returns `WWW-Authenticate: Negotiate`.
 - SQL replica refusal: verify the named profile, its host is the correct AG listener, its exact database participates in the AG, read-only routing is configured, and that profile's identity can execute the replica proof.
 - SQL connection required: call `sql_list_connections` and select the profile identified by the incident evidence.
@@ -148,7 +155,7 @@ Kiro hot-reloads agent/MCP profile edits, but dependency or compiled server chan
 - TLS failure: install/set the correct CA; never disable verification.
 - HTTP 401/403: verify the read-only token and resource permission.
 - Empty evidence: check connection/profile selection, database, window, timezone, retention, sampling, database/collection/project/repository allowlist, revision mapping, and replica lag.
-- Subagent fails immediately: verify its exact MCP permission rules and server startup.
+- Subagent fails immediately: run the machine-local permission check, inspect `/mcp`, and verify that specialist's server startup.
 - Wiki result is missing: confirm the files are under `wiki\`, restart the Kiro session to refresh the auto-updated index, and inspect `/context show`.
 - Wiki result is stale or contradictory: preserve the conflict in the report and verify against immutable source/runtime evidence; do not silently edit the wiki.
 - Kiro environment issue: run `kiro-cli diagnostic`; some releases expose the older `kiro-cli doctor` name.

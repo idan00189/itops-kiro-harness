@@ -18,6 +18,11 @@ if (-not (Test-Path -LiteralPath "dist\mcp\core.js")) {
     throw "The harness is not built. Run .\scripts\Install-ItOps.ps1 first."
 }
 
+& node "dist\cli\configure-kiro-permissions.js" "--check"
+if ($LASTEXITCODE -ne 0) {
+    throw "Kiro ITOps permissions are incomplete. Run .\scripts\Set-ItOpsKiroPermissions.ps1 once on this PC."
+}
+
 & node "dist\cli\validate-config.js" "--runtime"
 if ($LASTEXITCODE -ne 0) { throw "Runtime configuration validation failed." }
 

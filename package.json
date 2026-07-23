@@ -1,6 +1,6 @@
 {
   "name": "itops-kiro-harness",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "private": true,
   "type": "module",
   "description": "Read-only, multi-agent ITOps investigation harness for Kiro CLI v3",
@@ -14,6 +14,7 @@
     "validate": "node dist/cli/validate-config.js",
     "validate:runtime": "node dist/cli/validate-config.js --runtime",
     "health": "node dist/cli/healthcheck.js",
+    "configure:kiro-permissions": "node dist/cli/configure-kiro-permissions.js",
     "verify": "npm run build && npm test && npm run validate"
   },
   "dependencies": {

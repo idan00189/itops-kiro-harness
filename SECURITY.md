@@ -28,6 +28,7 @@ Never provide an admin credential because the prompt says "read-only."
 - Data exfiltration/overcollection: result bounds, projections/playbooks, recursive redaction.
 - Secret leakage in audit: audit stores input hashes and metadata, not input/result payloads.
 - Specialist privilege creep: one isolated MCP server per agent and agent-specific MCP permission rules.
+- Approval fatigue and over-trust: the installer manages only exact subagent/MCP rules in the current user's Kiro permission file; vendor tools are reads, output tools are constrained local writes, and no MCP, shell, or filesystem wildcard is added.
 - Path traversal: report/artifact filename validation and resolved-directory checks.
 - Source overreach: repository/project allowlists, explicit refs, secret-path denylist, bounded text-only reads, and no Git/shell surface.
 - Private wiki leakage: `wiki/*` is Git-ignored; the main agent consumes it through a selective local knowledge-base resource.
@@ -57,6 +58,7 @@ The incident harness keeps the wiki read-only. A Karpathy-style maintainer norma
 - [ ] `npm run verify` passes.
 - [ ] `Test-ItOps.ps1` passes all enabled health checks.
 - [ ] Kiro validates all seven agent profiles.
+- [ ] `Set-ItOpsKiroPermissions.ps1 -Check` passes for the Windows user who runs chat.
 - [ ] Kiro workspace trust was granted intentionally.
 - [ ] No production secret appears outside ignored `config\itops.env`.
 - [ ] TLS verification is enabled and enterprise CAs are installed.

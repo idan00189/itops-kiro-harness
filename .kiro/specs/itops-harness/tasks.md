@@ -17,6 +17,9 @@
 - [x] Add v3 hooks, steering, AGENTS.md, and the empty wiki folder.
 - [x] Add one environment template and Windows PowerShell workflows.
 - [x] Add Splunk Windows Kerberos/SPNEGO, Argo CD SSO initialization, and authentication-mode validation.
+- [x] Add exact machine-local Kiro subagent/MCP permission installation, backup, validation, and removal.
+- [x] Flatten the public Splunk dashboard tool schema and retain strict internal panel validation.
+- [x] Replace the agent-loop session hook with deterministic `AgentSpawn` policy context.
 - [x] Install pinned dependencies and produce the lockfile.
 - [x] Run compilation, tests, structural validation, and secret scan.
 - [ ] Run live connection health checks after the operator supplies credentials.

@@ -27,7 +27,7 @@ Never use `collect`, `delete`, `dump`, `into`, `map`, `outputcsv`, `outputlookup
 
 ## Dashboard XML
 
-Use `splunk_generate_dashboard_xml` only after useful panels are proven by searches. Generate 3–8 panels that cover:
+Use `splunk_generate_dashboard_xml` only after useful panels are proven by searches. Its `panelsJson` argument is a JSON string containing an array of 3–8 panel objects; do not pass a nested array directly. Each object has `title`, `search`, optional `earliest`/`latest`, `visualization` (`table`, `chart`, `single`, or `event`), and optional `chartType` for charts. Generate panels that cover:
 
 - traffic and error rate over time
 - top error signatures
