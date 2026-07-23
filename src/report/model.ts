@@ -97,6 +97,21 @@ export const incidentReportSchema = z.object({
 
 export type IncidentReport = z.infer<typeof incidentReportSchema>;
 
+export const reportWriteToolInputSchema = z.object({
+  reportJson: z.string().min(2).max(1_000_000),
+  format: z.enum(["md", "html"]).default("md"),
+});
+
+export function parseIncidentReportJson(reportJson: string): IncidentReport {
+  let candidate: unknown;
+  try {
+    candidate = JSON.parse(reportJson);
+  } catch {
+    throw new Error("reportJson must contain valid JSON");
+  }
+  return incidentReportSchema.parse(candidate);
+}
+
 export function assertHebrewReport(report: IncidentReport): void {
   const humanText = [
     report.metadata.title,

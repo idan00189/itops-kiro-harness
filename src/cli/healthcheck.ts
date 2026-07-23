@@ -60,7 +60,7 @@ for (const check of checks) {
     continue;
   }
   const client = new Client(
-    { name: "itops-healthcheck", version: "1.4.0" },
+    { name: "itops-healthcheck", version: "1.5.0" },
     { capabilities: {} },
   );
   const transport = new StdioClientTransport({

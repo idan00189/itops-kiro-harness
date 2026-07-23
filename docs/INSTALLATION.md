@@ -178,6 +178,8 @@ Kiro resolves permissions as `deny` over `ask` over `allow`, so a restrictive wo
 
 If Splunk reports `maximum allowed nesting depth`, confirm that the repository is on version 1.3.1 or newer, rerun the installer, and open a fresh chat. The corrected harness exposes the dashboard panel collection through a flat `panelsJson` tool argument and validates the structured panels inside the MCP server.
 
+If `report_write` reports the same nesting-depth error, confirm that the repository is on version 1.5.0 or newer, rerun the installer, and open a fresh chat. The report writer now accepts the complete structured report through a flat `reportJson` string and performs the strict incident-schema validation inside the MCP server.
+
 If Kiro reports an invalid hook trigger after upgrading, pull version 1.4.0 or newer. The v3 standalone session hook uses the documented `SessionStart` trigger rather than the legacy embedded-hook name `agentSpawn`/`AgentSpawn`.
 
 For Kerberos `401`/`403`, TLS, replica, OAuth, and vendor-specific failures, use the [operations troubleshooting guide](OPERATIONS.md#troubleshooting).

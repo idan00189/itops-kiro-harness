@@ -94,7 +94,7 @@ export async function fetchNegotiateText(
     "--header",
     "Accept: application/json",
     "--header",
-    "User-Agent: itops-kiro-harness/1.4.0",
+    "User-Agent: itops-kiro-harness/1.5.0",
   ];
   for (const [name, value] of Object.entries(options.headers ?? {})) {
     args.push("--header", `${name}: ${value}`);

@@ -82,7 +82,7 @@ State contributing factors separately from the initiating cause. Quantify confid
 
 ## Write the report
 
-Call `report_write` with structured Hebrew content. Default to `md`; use `html` only when requested. Include:
+Call `report_write` with the complete structured Hebrew report serialized as a JSON string in `reportJson`. Do not pass a nested object: the flattened string keeps the public MCP schema compatible with Kiro CLI v3, while the server parses and strictly validates the incident schema. Default `format` to `md`; use `html` only when requested. Include:
 
 1. metadata and executive summary
 2. scope, impact, and timeline

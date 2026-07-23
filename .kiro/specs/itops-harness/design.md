@@ -34,10 +34,10 @@ The private `wiki/` tree is an auto-updated `best` knowledge-base resource on th
 1. Vendor identity: read-only scopes/RBAC/roles; current Windows identity for Kerberos/integrated SQL; Microsoft/Entra federation only through supported SSO/OAuth flows.
 2. MCP surface: only read tools; report/XML writes are local and path constrained, and report writing is prompt-gated.
 3. Connection proof: every named SQL profile requests read intent and verifies its exact database is a read-only AG secondary before its isolated pool and inside each batch.
-4. Input guards: explicit database connection selectors, Mongo system-database denial and per-profile database/collection allowlists, SQL/SPL query allowlists, remote Dynatrace read scopes, Argo project/app allowlists, source repository/project allowlists, safe refs, and secret-path denials.
+4. Input guards: explicit database connection selectors, Mongo system-database denial and per-profile database/collection allowlists, SQL/SPL query allowlists, remote Dynatrace read scopes, Argo project/app allowlists, source repository/project allowlists, exact deployed full commit SHAs, and secret-path denials.
 5. Runtime bounds: timeouts, rows/documents/bytes, pool limits, TLS verification.
 6. Kiro policy: tool tags, exact machine-local subagent/MCP trust, isolated agent permission rules, and denied shell/fs_write/web.
-7. Hook policy: deterministic `AgentSpawn` context, v3 `PreToolUse` blocking, and metadata-only `PostToolUse` audit.
+7. Hook policy: deterministic v3 `SessionStart` context, v3 `PreToolUse` blocking, and metadata-only `PostToolUse` audit.
 8. Knowledge policy: indexed selective retrieval, provenance IDs, prompt-injection handling, and no incident-time wiki writes.
 
 ## Data handling
@@ -48,4 +48,4 @@ MCP outputs are recursively redacted and byte bounded. Audit records store times
 
 Missing/ambiguous connection selection, missing configuration, placeholders, unsafe TLS, non-read scopes, query violations, HTTP limits, and vendor errors fail closed. The report records unavailable sources rather than bypassing controls.
 
-The Splunk dashboard generator exposes a flat `panelsJson` string in its public MCP schema. The server parses the JSON and validates typed panel objects internally. This avoids model-provider function-schema nesting rejection without weakening dashboard validation.
+The Splunk dashboard generator exposes a flat `panelsJson` string in its public MCP schema. The report writer likewise accepts a flat `reportJson` string. Each server parses the JSON and validates the complete typed object internally. This avoids model-provider function-schema nesting rejection without weakening dashboard or incident-report validation.

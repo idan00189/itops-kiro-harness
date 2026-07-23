@@ -11,11 +11,11 @@ Require:
 
 - incident ID, UTC incident and baseline windows, environment, and affected service
 - provider plus exact `workspace/repository` or GitLab project
-- deployed commit SHA or an explicitly justified immutable ref
+- exact deployed 40- or 64-character commit SHA
 - observed stack frame, exception, route, symbol, feature flag, or failing job
 - one precise causal question and the evidence IDs that motivated it
 
-Do not infer a repository from a service name. Do not replace a missing deployed revision with `HEAD`, `main`, or another default branch. Return the missing mapping as an evidence gap.
+Do not infer a repository from a service name. The MCP tools reject abbreviated hashes, tags, `HEAD`, `main`, and other branch names; return a missing exact deployed SHA as an evidence gap.
 
 Read [source-code-playbook.md](references/source-code-playbook.md) before examining a diff, pull/merge request, or pipeline.
 

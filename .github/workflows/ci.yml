@@ -36,6 +36,9 @@ jobs:
       - name: Build, test, and validate Kiro configuration
         run: npm run verify
 
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Parse Windows PowerShell scripts
         if: runner.os == 'Windows'
         shell: pwsh
