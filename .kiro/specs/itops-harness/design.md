@@ -25,12 +25,14 @@ Each agent embeds one stdio MCP server. This prevents workspace-global MCP inher
 
 The launcher pins the orchestrator as the user-facing agent. Kiro subagent `availableAgents` and `trustedAgents` contain exactly the six specialist profiles, which report summaries back to the orchestrator.
 
+The orchestrator routes routine questions and targeted checks to direct chat responses. It invokes the full investigation skill and report writer only for explicit report or comprehensive investigation/RCA/postmortem intent. Tool usage alone never changes the output mode.
+
 The private `wiki/` tree is an auto-updated `best` knowledge-base resource on the orchestrator only. It is Git-ignored and consumed read-only. This preserves Karpathy-style immutable-source/maintained-wiki/schema separation without eagerly loading the entire knowledge base.
 
 ## Control layers
 
 1. Vendor identity: read-only scopes/RBAC/roles.
-2. MCP surface: only read tools; report/XML writes are local and path constrained.
+2. MCP surface: only read tools; report/XML writes are local and path constrained, and report writing is prompt-gated.
 3. Input guards: SQL/SPL/Mongo allowlists, DQL source allowlist, Argo project/app allowlists, source repository/project allowlists, safe refs, and secret-path denials.
 4. Runtime bounds: timeouts, rows/documents/bytes, pool limits, TLS verification.
 5. Kiro policy: tool tags, exact MCP permission matches, denied shell/fs_write/web.

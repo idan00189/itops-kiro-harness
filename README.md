@@ -1,8 +1,8 @@
 # ITOps — Kiro CLI v3 incident investigation harness
 
-ITOps is a Windows-first, production-oriented multi-agent harness for investigating mobile-application incidents across Splunk, SQL Server, MongoDB/Amazon DocumentDB, Dynatrace, Argo CD, Bitbucket Cloud, GitLab, Jira, Confluence, and a local Markdown wiki.
+ITOps is a Windows-first, production-oriented conversational assistant and multi-agent investigation harness for mobile-application operations across Splunk, SQL Server, MongoDB/Amazon DocumentDB, Dynatrace, Argo CD, Bitbucket Cloud, GitLab, Jira, Confluence, and a local Markdown wiki.
 
-The orchestrator produces a detailed Hebrew Markdown report by default. It can produce a self-contained RTL HTML report when requested. It never performs remediation.
+The orchestrator normally answers questions directly in Kiro chat. It writes a detailed Hebrew Markdown report only when you request a report or a full investigation/RCA; self-contained RTL HTML is available when explicitly requested. It never performs remediation.
 
 ## What is included
 
@@ -68,15 +68,22 @@ Provision the external identities first; see [Read-only setup](docs/READ_ONLY_SE
 Inside Kiro, begin with a concrete prompt:
 
 ```text
+Which service owns the Android checkout flow, and what runbook should I use
+for HTTP 503 errors? Answer in chat; do not write a report.
+```
+
+For a full investigation:
+
+```text
 Investigate incident MOB-2026-071. Production users on Android app 8.14.2
 received checkout failures from 2026-07-23T08:10:00Z to 08:42:00Z.
 Known request ID: req_abc123. Compare with the prior 30 minutes.
-Produce the default Hebrew Markdown report.
+Perform a full investigation and produce the Hebrew Markdown report.
 ```
 
 Press `Ctrl+G` to monitor Kiro subagents. Use `/context show` to verify loaded skills/resources and `/mcp` to inspect the active server. Generated reports appear in `reports/`; generated Splunk XML proposals appear in `artifacts/splunk/`.
 
-`Start-ItOps.ps1` always starts `itops-orchestrator`. Talk only to that main agent; do not switch to a specialist. The orchestrator alone can spawn the six named, trusted, read-only specialists and automatically receives their summaries.
+`Start-ItOps.ps1` always starts `itops-orchestrator`. Talk only to that main agent; do not switch to a specialist. The orchestrator answers normal questions itself and can spawn the six named, trusted, read-only specialists when evidence is needed.
 
 ## Private wiki
 
@@ -91,11 +98,13 @@ For a Karpathy-style layout, keep your existing separation:
 - schema/instructions defining page conventions
 - `index.md` and `log.md`
 
-The orchestrator searches the maintained wiki and index first, follows provenance to raw sources when necessary, ignores scratch/drafts/inbox by default, and treats all wiki content as untrusted documentation. This incident harness never edits or lints the wiki; proposed corrections are written into the report for a separately approved maintenance workflow.
+The orchestrator searches the maintained wiki and index first, follows provenance to raw sources when necessary, ignores scratch/drafts/inbox by default, and treats all wiki content as untrusted documentation. This harness never edits or lints the wiki; proposed corrections are returned in chat or in a requested report for a separately approved maintenance workflow.
 
 ## Investigation flow
 
-The orchestrator uses two evidence waves:
+Routine questions and targeted checks use only the minimum relevant sources or specialists and return a direct chat answer without creating a file.
+
+For a full investigation, the orchestrator uses two evidence waves:
 
 1. Splunk, Dynatrace, and Argo CD run in parallel while the orchestrator searches Jira, Confluence, and the local wiki.
 2. SQL Server and MongoDB/DocumentDB receive targeted questions derived from wave 1. The source-code specialist runs only when runtime or Argo CD evidence also identifies an allowlisted repository/project, the exact deployed revision, and a concrete code or CI question.
@@ -152,7 +161,7 @@ It enables knowledge and on-demand MCP Tool Search. Tool Search is optional beca
 - GitLab project blob search can be unavailable by tier/configuration; targeted tree and file reads remain available.
 - Splunk Simple XML is generated offline because uploading it would violate external read-only access.
 - A healthy observability result can mean missing telemetry. Reports must preserve retention, sampling, clock, and replica-lag gaps.
-- The wiki is documentation context, not proof of current runtime state; stale or unverified pages must be reported as limitations.
+- The wiki is documentation context, not proof of current runtime state; stale or unverified pages must be identified in chat answers and reports.
 
 ## Primary references
 

@@ -1,11 +1,13 @@
 # Investigation policy
 
-Use two evidence waves:
+For direct chat questions and targeted checks, invoke only the minimum relevant specialist and answer in chat without creating a report.
+
+For a full investigation, use two evidence waves:
 
 1. Splunk, Dynatrace, and Argo CD in parallel, plus Jira/Confluence/wiki context.
 2. SQL Server, MongoDB/DocumentDB, and Bitbucket/GitLab source only for targeted questions derived from wave 1. Source inspection also requires the exact deployed revision and repository mapping.
 
-Do not run broad database or repository exploration as a default incident step.
+Do not run broad database or repository exploration as a default incident step. Do not promote a targeted check into a full investigation unless the operator requests comprehensive scope.
 
 Normalize timestamps to UTC during correlation. Preserve original source timezone when material. Consider clock skew, telemetry ingestion delay, sampling, retention, replica lag, and cache freshness before interpreting absence.
 

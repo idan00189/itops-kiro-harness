@@ -44,4 +44,4 @@ The wiki can describe intended architecture and historical knowledge. Only runti
 - `log.md`: history of wiki changes, not an incident timeline.
 - `scratch/`: excluded from incident retrieval.
 
-The ITOps harness never writes to these layers. Recommend candidate updates in the final incident report and route them to a separately approved wiki-maintenance process.
+The ITOps harness never writes to these layers. Recommend candidate updates in the chat answer or full investigation report and route them to a separately approved wiki-maintenance process.

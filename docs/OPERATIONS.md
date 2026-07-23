@@ -1,6 +1,6 @@
 # Operating ITOps
 
-## Start an investigation
+## Start ITOps chat
 
 Run:
 
@@ -10,7 +10,18 @@ Run:
 
 This command always opens `itops-orchestrator`. Keep the conversation there. Do not run or switch to `itops-splunk`, `itops-dynatrace`, or another specialist; the orchestrator selects and coordinates them internally.
 
-Provide:
+The default interaction is an ordinary operational question. Examples:
+
+```text
+What does error MOB-PAY-104 mean?
+Which team owns checkout-api?
+Check whether this request ID appears in Splunk during the last 15 minutes.
+Explain the current Argo CD revision for mobile-prod.
+```
+
+The orchestrator answers in chat and may use the wiki, Jira, Confluence, or a minimal specialist delegation. It does not write a report.
+
+For a full investigation, provide:
 
 - incident ID and severity
 - production environment
@@ -18,7 +29,7 @@ Provide:
 - UTC window or source timezone
 - mobile platform/app version/region
 - safe correlation identifiers
-- desired report format
+- desired report format, if HTML is required
 
 If a value is unknown, say so. Do not substitute an assumed environment silently.
 
@@ -47,11 +58,13 @@ wiki\
 
 Keep your existing paths and schema; the harness does not require renaming pages. Wiki contents are Git-ignored and are indexed locally as `ITOpsWiki` when the orchestrator starts.
 
-The incident workflow is query-only. It searches maintained/index pages before raw sources, records `WIKI-NNN` citations, ignores scratch/drafts/inbox by default, and does not ingest or update the wiki. Review proposed wiki corrections from the final report in your separate maintenance workflow.
+The wiki workflow is query-only. It searches maintained/index pages before raw sources, records `WIKI-NNN` citations, ignores scratch/drafts/inbox by default, and does not ingest or update the wiki. Review proposed corrections from the chat answer or full investigation report in your separate maintenance workflow.
 
 ## Expected investigation pattern
 
-Wave 1 runs Splunk, Dynatrace, and Argo CD in parallel. The orchestrator also searches Jira, Confluence, and `wiki/`.
+For a normal question or targeted check, the orchestrator uses only the smallest relevant source set and answers in chat.
+
+For a full investigation, wave 1 runs Splunk, Dynatrace, and Argo CD in parallel. The orchestrator also searches Jira, Confluence, and `wiki/`.
 
 Wave 2 runs targeted SQL, Mongo/DocumentDB, or source-code checks. Examples:
 
@@ -63,7 +76,9 @@ Avoid questions like "find anything unusual in the database" or "search the repo
 
 ## Reports
 
-Markdown is default. Ask explicitly for HTML:
+Reports are not created for routine chat questions or targeted checks, even when a specialist is used.
+
+A report is created when you explicitly request one or ask for a full/end-to-end investigation, formal RCA, postmortem, or comprehensive multi-system analysis. Hebrew Markdown is the default. Ask explicitly for HTML:
 
 ```text
 Produce the final report as HTML in Hebrew.

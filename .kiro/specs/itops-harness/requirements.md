@@ -11,6 +11,15 @@ THE SYSTEM SHALL delegate observability and deployment checks before targeted da
 WHEN the operator starts ITOps
 THE SYSTEM SHALL expose the orchestrator as the sole conversational front door and restrict internal delegation to the six named custom specialists.
 
+WHEN the operator asks a routine question, explanation, lookup, status question, or targeted diagnostic question
+THE SYSTEM SHALL answer directly in chat and SHALL NOT create a report file.
+
+WHEN tools or specialist subagents are needed for a targeted answer
+THE SYSTEM SHALL use the minimum relevant evidence sources and SHALL NOT promote the request to report mode solely because delegation occurred.
+
+WHEN the operator explicitly requests a report, full/end-to-end investigation, formal RCA, postmortem, or comprehensive multi-system incident analysis
+THE SYSTEM SHALL run the full investigation workflow and create the Hebrew Markdown report by default.
+
 WHEN a private wiki is present
 THE SYSTEM SHALL index it selectively, search maintained synthesis before immutable sources, keep it read-only, and prevent its contents from entering Git.
 

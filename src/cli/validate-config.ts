@@ -113,6 +113,18 @@ async function validateAgents(): Promise<void> {
           ),
           `${file}: wiki must be indexed, not injected eagerly`,
         );
+        check(
+          profile.includes("Default mode: direct chat answer."),
+          `${file}: direct chat must be the default operating mode`,
+        );
+        check(
+          profile.includes("Do not call `report_write`"),
+          `${file}: missing report-write prohibition for direct chat`,
+        );
+        check(
+          profile.includes("Full investigation/report mode."),
+          `${file}: missing explicit report-mode entry conditions`,
+        );
       } else {
         check(
           profile.includes("internal, non-user-facing"),
@@ -178,6 +190,20 @@ async function validateSkills(): Promise<void> {
         Object.keys(config).every((key) => ["name", "description"].includes(key)),
         `${name}: unsupported SKILL.md frontmatter field`,
       );
+      if (name === "itops-orchestrate") {
+        const description = String(config.description);
+        check(
+          description.includes("Use only") && description.includes("do not use for routine"),
+          `${name}: full-investigation skill must not trigger for routine chat`,
+        );
+        const interfaceConfig = parse(
+          await readFile(join(directory, name, "agents", "openai.yaml"), "utf8"),
+        ) as { interface?: { default_prompt?: string } };
+        check(
+          interfaceConfig.interface?.default_prompt?.includes("$itops-orchestrate"),
+          `${name}: openai.yaml default prompt must mention $itops-orchestrate`,
+        );
+      }
     } catch (error) {
       errors.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -255,6 +281,15 @@ async function validateLayout(): Promise<void> {
   const gitignore = await readFile(resolve(root, ".gitignore"), "utf8");
   check(gitignore.includes("wiki/*"), "Private wiki contents must be ignored by Git");
   check(gitignore.includes("!wiki/.gitkeep"), "wiki/.gitkeep must remain tracked");
+  const reporting = await readFile(resolve(root, ".kiro/steering/reporting.md"), "utf8");
+  check(
+    reporting.includes("The default interaction is a direct answer in Kiro chat"),
+    "Reporting policy must default to direct chat",
+  );
+  check(
+    reporting.includes("Never create a report merely because one or more specialists were used"),
+    "Reporting policy must gate report creation independently of delegation",
+  );
 }
 
 function requireVariables(names: string[]): void {

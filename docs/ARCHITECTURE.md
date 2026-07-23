@@ -4,7 +4,7 @@
 
 The harness uses workspace Markdown profiles in `.kiro/agents/`. Every profile embeds exactly one MCP server. There is no workspace-global `mcp.json`, so a specialist cannot inherit unrelated database or operations tools.
 
-The orchestrator is the only user-facing agent and the only profile with `subagent`. Both Kiro `availableAgents`/`trustedAgents` and capability permissions restrict delegation to the six named read-only specialists. Specialists cannot spawn agents and return their summaries to the orchestrator.
+The orchestrator is the only user-facing agent and the only profile with `subagent`. It answers ordinary questions directly and uses specialists only when evidence is needed. Both Kiro `availableAgents`/`trustedAgents` and capability permissions restrict delegation to the six named read-only specialists. Specialists cannot spawn agents and return their summaries to the orchestrator.
 
 ```mermaid
 sequenceDiagram
@@ -15,7 +15,7 @@ sequenceDiagram
     participant Code as Bitbucket/GitLab source
     participant Core as Jira + Confluence + report
     participant Wiki as Indexed private ITOpsWiki
-    User->>O: Incident contract
+    User->>O: Question or full-investigation request
     par Context
         O->>Wiki: Selective knowledge search
         O->>Core: Jira/Confluence reads
@@ -29,8 +29,12 @@ sequenceDiagram
     end
     DB-->>O: Data-state evidence
     Code-->>O: Commit/diff/review/CI evidence
-    O->>Core: Structured Hebrew report
-    Core-->>User: Markdown or RTL HTML
+    alt Direct question / targeted check
+        O-->>User: Chat answer, no report file
+    else Full investigation / report requested
+        O->>Core: Structured Hebrew report
+        Core-->>User: Markdown or RTL HTML
+    end
 ```
 
 ## Kiro v3 capabilities used
@@ -59,6 +63,15 @@ Kiro Tool Search is optional. The installer can enable it, but the agent-specifi
 The main profile registers `wiki/` as `ITOpsWiki` instead of expanding `wiki/**/*.md` as eager resources. Kiro knowledge-base resources support large indexed content with incremental loading, avoiding full-wiki context injection.
 
 The orchestrator follows Karpathy-style separation between immutable sources, maintained synthesis, and schema. It uses the maintained index first and cites wiki provenance as `WIKI-NNN`. Wiki text can guide navigation but cannot override ITOps policy or establish current production state. The incident harness has no wiki write capability.
+
+## Response routing
+
+The main profile has two explicit modes:
+
+- direct chat answer is the default for questions, explanations, lookups, status requests, and targeted checks
+- full investigation/report mode activates only for an explicit report request or comprehensive investigation/RCA/postmortem intent
+
+Using an MCP tool or specialist never activates report mode by itself.
 
 ## MCP implementation
 

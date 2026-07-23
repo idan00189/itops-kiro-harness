@@ -15,7 +15,9 @@ This workspace is a production incident investigation harness for a mobile appli
 
 ## Investigation behavior
 
-- Work from an incident ID, exact environment, UTC interval, and observable symptom.
+- Default to a direct chat answer for routine questions and targeted checks; use the minimum relevant sources or specialists.
+- Do not create a report merely because tools or subagents were used.
+- For a full investigation, work from an incident ID, exact environment, UTC interval, and observable symptom.
 - Use a comparable baseline and look for unaffected controls.
 - Minimize sensitive data; prefer aggregates, hashes, status, and redacted samples.
 - Record query bounds, observation time, result count, truncation, retention, sampling, and replica-lag caveats.
@@ -29,7 +31,8 @@ This workspace is a production incident investigation harness for a mobile appli
 
 ## Output
 
-- Write the final incident report in Hebrew.
-- Default to Markdown. Use HTML only when explicitly requested.
+- Answer ordinary questions directly in chat in the operator's language.
+- Write a report only when explicitly requested or after a full/end-to-end investigation, formal RCA, postmortem, or comprehensive multi-system incident analysis.
+- When writing a report, use Hebrew Markdown by default. Use HTML only when explicitly requested.
 - Keep technical syntax and identifiers in their original form where translation reduces accuracy.
 - State prominently that no remediation was executed and every change requires human approval.
