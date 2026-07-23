@@ -89,6 +89,12 @@ export function assertReadOnlySql(query: string, maxLength = 20_000): string {
   if (/\binto\b/i.test(normalized) || /\b(?:xp|sp)_[a-z0-9_]+\b/i.test(normalized)) {
     throw new Error("SELECT INTO and stored procedure calls are blocked");
   }
+  if (/\bnext\s+value\s+for\b/i.test(normalized)) {
+    throw new Error("SQL sequence advancement is blocked");
+  }
+  if (/\b(?:holdlock|tablockx|updlock|xlock)\b/i.test(normalized)) {
+    throw new Error("SQL update or exclusive locking hints are blocked");
+  }
   if (/\b[a-z0-9_]+\s*\.\s*[a-z0-9_]+\s*\.\s*[a-z0-9_]+\b/i.test(normalized)) {
     throw new Error("Cross-database three-part identifiers are blocked");
   }
@@ -97,24 +103,46 @@ export function assertReadOnlySql(query: string, maxLength = 20_000): string {
 
 const SPLUNK_MUTATING_COMMANDS = [
   "collect",
+  "createrss",
   "delete",
   "dump",
   "into",
   "map",
+  "mcollect",
+  "meventcollect",
   "outputcsv",
   "outputlookup",
   "run",
+  "runshellscript",
   "script",
+  "sendalert",
   "sendemail",
+  "sendresults",
+  "tscollect",
+];
+
+const SPLUNK_OPAQUE_COMMANDS = [
+  "dbxquery",
+  "loadjob",
+  "rest",
+  "savedsearch",
 ];
 
 export function assertReadOnlySpl(search: string, maxLength = 20_000): string {
   assertNoControlCharacters(search, "SPL query");
   const normalized = search.trim();
   if (!normalized || normalized.length > maxLength) throw new Error("SPL query is empty or too long");
+  if (/`[^`]+`/.test(normalized)) {
+    throw new Error("SPL macros are blocked because their expanded commands cannot be inspected");
+  }
   for (const command of SPLUNK_MUTATING_COMMANDS) {
     if (new RegExp(`\\|\\s*${command}\\b`, "i").test(normalized)) {
       throw new Error(`SPL command ${command} is blocked by read-only policy`);
+    }
+  }
+  for (const command of SPLUNK_OPAQUE_COMMANDS) {
+    if (new RegExp(`(?:^|\\|)\\s*${command}\\b`, "i").test(normalized)) {
+      throw new Error(`SPL command ${command} is blocked because its effective scope is opaque`);
     }
   }
   return normalized.replace(/^search\s+/i, "");

@@ -23,5 +23,5 @@
 - [x] Require exact deployed full commit SHAs for all Bitbucket/GitLab source and CI evidence reads.
 - [x] Replace the agent-loop session hook with deterministic v3 `SessionStart` policy context.
 - [x] Install pinned dependencies and produce the lockfile.
-- [x] Run compilation, unit/guard tests, compiled MCP protocol tests, mocked HTTP integration tests, structural/skill validation, dependency audit, and secret scan.
+- [x] Run compilation, 118 unit/guard/runtime tests, compiled MCP protocol tests, mocked HTTP integration tests, structural/skill validation, dependency audit, UTF-8 output-bound checks, evidence-integrity checks, and secret scan.
 - [ ] Run live connection health checks after the operator supplies credentials.

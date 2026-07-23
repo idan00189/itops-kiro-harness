@@ -104,6 +104,23 @@ describe("Hebrew incident report", () => {
     expect(() => parseIncidentReportJson('{"metadata":{}}')).toThrow();
   });
 
+  it("enforces evidence-ledger integrity and proof for a verified root cause", () => {
+    const missing = reportFixture();
+    missing.findings[0]!.evidenceIds = ["MISSING"];
+    expect(() => incidentReportSchema.parse(missing)).toThrow(/not present in the evidence ledger/i);
+
+    const duplicate = reportFixture();
+    duplicate.evidence.push({ ...duplicate.evidence[0]! });
+    expect(() => incidentReportSchema.parse(duplicate)).toThrow(/duplicated/i);
+
+    const unsupported = reportFixture();
+    unsupported.rootCause.status = "מאומת";
+    unsupported.rootCause.evidenceIds = [];
+    expect(() => incidentReportSchema.parse(unsupported)).toThrow(
+      /verified root cause must cite/i,
+    );
+  });
+
   it("validates and renders the default Markdown report", () => {
     const report = reportFixture();
     expect(() => assertHebrewReport(report)).not.toThrow();

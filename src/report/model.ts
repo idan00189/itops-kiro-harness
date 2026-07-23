@@ -93,6 +93,54 @@ export const incidentReportSchema = z.object({
     )
     .max(100)
     .default([]),
+}).superRefine((report, context) => {
+  const evidenceIds = new Set<string>();
+  for (const [index, evidence] of report.evidence.entries()) {
+    if (evidenceIds.has(evidence.id)) {
+      context.addIssue({
+        code: "custom",
+        path: ["evidence", index, "id"],
+        message: `Evidence ID ${evidence.id} is duplicated`,
+      });
+    }
+    evidenceIds.add(evidence.id);
+  }
+
+  const references: Array<{ id: string; path: Array<string | number> }> = [
+    ...report.timeline.flatMap((item, index) =>
+      item.evidenceIds.map((id, evidenceIndex) => ({
+        id,
+        path: ["timeline", index, "evidenceIds", evidenceIndex],
+      })),
+    ),
+    ...report.findings.flatMap((item, index) =>
+      item.evidenceIds.map((id, evidenceIndex) => ({
+        id,
+        path: ["findings", index, "evidenceIds", evidenceIndex],
+      })),
+    ),
+    ...report.rootCause.evidenceIds.map((id, evidenceIndex) => ({
+      id,
+      path: ["rootCause", "evidenceIds", evidenceIndex],
+    })),
+  ];
+  for (const reference of references) {
+    if (!evidenceIds.has(reference.id)) {
+      context.addIssue({
+        code: "custom",
+        path: reference.path,
+        message: `Evidence ID ${reference.id} is not present in the evidence ledger`,
+      });
+    }
+  }
+
+  if (report.rootCause.status === "מאומת" && report.rootCause.evidenceIds.length === 0) {
+    context.addIssue({
+      code: "custom",
+      path: ["rootCause", "evidenceIds"],
+      message: "A verified root cause must cite at least one evidence ID",
+    });
+  }
 });
 
 export type IncidentReport = z.infer<typeof incidentReportSchema>;

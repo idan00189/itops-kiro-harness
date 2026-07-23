@@ -2,7 +2,7 @@
 
 Date: 2026-07-23
 
-Release candidate: 1.5.0
+Release candidate: 1.5.1
 
 Scope: repository implementation, Kiro CLI v3 configuration, local MCP protocol, read-only controls, report/artifact generation, mocked vendor HTTP contracts, dependency security, and Windows automation.
 
@@ -17,7 +17,7 @@ This distinction is important: mocked and fail-closed tests establish harness be
 | Area | Result | Evidence |
 | --- | --- | --- |
 | TypeScript build | PASS | Clean Node 24.14 build with strict TypeScript settings |
-| Unit and guard behavior | PASS | SQL, SPL, MongoDB, source, URL, redaction, replica, report, XML, permission, hook, and profile tests |
+| Unit and guard behavior | PASS | 118 tests across 15 files covering SQL, SPL, MongoDB, source, URL, redaction, replica, report, XML, permission, hook, profile, and runtime configuration behavior |
 | Compiled MCP protocol | PASS | All six local stdio servers launched through the MCP SDK; public tool lists exactly matched the trusted allowlist |
 | Tool annotations | PASS | External/local read tools are non-destructive and read-only; only the two constrained local writers have `readOnlyHint=false` |
 | Local artifacts | PASS | Markdown, RTL HTML, and safe Splunk Simple XML were generated and persisted inside workspace-confined directories |
@@ -29,6 +29,7 @@ This distinction is important: mocked and fail-closed tests establish harness be
 | MongoDB/DocumentDB | PASS (pre-network) | Multiple URI profiles enumerated without URIs/secrets; system databases, write stages, server-side code, and ambiguity rejected pre-network |
 | Kiro v3 hooks | PASS | Standalone v1/PascalCase format validated; command hooks executed; malformed input failed closed; audit omitted payloads |
 | Kiro v3 skills | PASS | All seven skill folders passed the skill validator and repository structural validation |
+| Runtime environment validation | PASS | The compiled CLI accepted a complete multi-integration read-only configuration without connecting and rejected missing, cleartext, TLS-insecure, wrong-path, and inconsistent-bound configurations |
 | Kiro permission reconciliation | PASS | Merge, backup/state, exact trust, restrictive-rule detection, and removal behavior covered |
 | Static security | PASS | Tracked operational outputs, private wiki pages, credential file types, and high-confidence secret signatures rejected |
 | Dependency security | PASS | `npm audit --omit=dev --audit-level=high` returned zero vulnerabilities |
@@ -43,6 +44,10 @@ This distinction is important: mocked and fail-closed tests establish harness be
 5. `report_write` exposed the deeply nested incident object directly in its MCP function schema. It now accepts a flat `reportJson` string and performs full strict validation inside the server, matching the existing `panelsJson` compatibility pattern.
 6. Design/task documentation still referenced the legacy `AgentSpawn` name. It now consistently specifies the v3 `SessionStart` trigger.
 7. The repository lacked protocol-level MCP tests and a tracked-file secret/output gate. Both are now part of `npm run verify`, and production dependency audit is part of GitHub CI.
+8. The result limiter counted JavaScript characters instead of UTF-8 bytes and could exceed the configured byte ceiling for Hebrew or other multibyte output. It now budgets the complete compact MCP envelope in bytes and preserves valid Unicode.
+9. A report could reference missing evidence, duplicate evidence IDs, or mark a root cause verified without evidence. Strict validation now rejects all three conditions.
+10. SQL queries beginning with `SELECT` could still advance a sequence or request update/exclusive locks. The read-only guard now rejects sequence advancement and operationally intrusive lock hints.
+11. Splunk searches could invoke write-producing metric commands or hide effective SPL inside macros, saved searches, prior jobs, REST, or DB Connect. These commands now fail closed before any vendor request.
 
 ## Current Kiro v3 compatibility
 
