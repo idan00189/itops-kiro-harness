@@ -7,6 +7,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+if (Test-Path -LiteralPath "variable:PSNativeCommandUseErrorActionPreference") {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $projectRoot
 

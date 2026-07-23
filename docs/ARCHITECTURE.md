@@ -46,7 +46,7 @@ sequenceDiagram
 | inline MCP servers | six portable agent-specific stdio processes plus official remote Dynatrace MCP |
 | remote MCP OAuth | Dynatrace confidential client, browser PKCE/Microsoft SSO, token refresh in Kiro |
 | capability permissions | exact machine-local subagent/MCP trust plus isolated agent rules denying shell/fs_write/web |
-| standalone v1 hooks | deterministic `AgentSpawn` session policy, pre-tool blocker, post-tool audit, manual report QA |
+| standalone v1 hooks | deterministic v3 `SessionStart` policy, pre-tool blocker, post-tool audit, manual report QA |
 | custom subagents | isolated observability, data, deployment, and source investigations |
 | subagent allow/trust lists | only the six custom ITOps specialists can run; no default general-purpose subagent |
 | Agent Skills | progressive domain playbooks and references |
@@ -56,6 +56,7 @@ sequenceDiagram
 | Specs | requirements/design/task history in `.kiro/specs/itops-harness/` |
 | MCP startup gate | start fails when configured servers do not initialize |
 | hot reload | Kiro picks up agent/MCP profile edits at idle boundaries |
+| Windows CI | PowerShell-native parsing plus full build/test/config validation on `windows-latest` |
 
 Kiro Tool Search is optional. The installer can enable it, but the agent-specific tool surfaces are already small. No model is pinned so the harness can use the model your Kiro organization permits.
 

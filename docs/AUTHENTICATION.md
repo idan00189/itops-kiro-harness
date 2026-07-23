@@ -9,7 +9,7 @@ The harness uses the single ignored `config\itops.env` file to select authentica
 | Jira / Confluence | API token | base URL, email, API token | Atlassian read-only account |
 | Bitbucket Cloud | access/API token | token, optional email, repository allowlist | repository/workspace read identity |
 | GitLab | project/group token | token and project allowlist | `read_api` / `read_repository` identity |
-| Splunk | Windows Kerberos | Negotiate-enabled HTTPS URL | currently logged-in Windows user |
+| Splunk | Windows Kerberos | Negotiate-enabled HTTPS host and port | currently logged-in Windows user |
 | SQL Server | Windows integrated per named connection | AG listeners and exact database names | currently logged-in Windows user or a profile-specific read-only SQL login |
 | MongoDB / DocumentDB | credential per named URI | TLS URIs and database/collection allowlists | `read` user across the authorized application databases |
 | Argo CD | CLI SSO | server, context and allowlists | Microsoft/Entra user mapped through Argo CD RBAC |
@@ -32,6 +32,8 @@ Dynatrace OAuth begins when Kiro starts the Dynatrace specialist for the first t
 ## Splunk Kerberos requirements
 
 `SPLUNK_AUTH_MODE=kerberos` calls `curl.exe` as a fixed child process without a shell. The harness requires the Windows build to advertise both SSPI and SPNEGO and passes `--negotiate --user :`, which uses the current Windows logon ticket. No domain password is accepted or stored.
+
+Set `SPLUNK_BASE_URL` to the HTTPS host and `SPLUNK_PORT` to the approved listener port. The usual direct Splunk management port is `8089`; an enterprise Kerberos reverse proxy may instead expose `443` or another port. The harness validates the range and rejects a conflict between a port embedded in the URL and `SPLUNK_PORT`.
 
 The configured HTTPS endpoint must advertise HTTP `Negotiate`. Direct Splunk management REST endpoints commonly use Splunk tokens instead; in that topology, an enterprise reverse proxy must terminate Kerberos and forward an authenticated, authorized identity to Splunk. If the endpoint does not support Negotiate, use a dedicated read-only token with `SPLUNK_AUTH_MODE=token`.
 

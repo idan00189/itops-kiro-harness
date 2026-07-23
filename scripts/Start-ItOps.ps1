@@ -5,6 +5,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+if (Test-Path -LiteralPath "variable:PSNativeCommandUseErrorActionPreference") {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $projectRoot
 
@@ -29,5 +32,5 @@ if ($LASTEXITCODE -ne 0) { throw "Runtime configuration validation failed." }
 & (Join-Path $PSScriptRoot "Initialize-ItOpsAuth.ps1") -EnvFile $EnvFile
 if ($LASTEXITCODE -ne 0) { throw "Interactive authentication initialization failed." }
 
-& kiro-cli chat --v3 --agent itops-orchestrator --require-mcp-startup
+& kiro-cli chat --v3 --tui --agent itops-orchestrator --require-mcp-startup
 exit $LASTEXITCODE

@@ -3,6 +3,7 @@ import {
   envChoice,
   requireLoopbackUrl,
   requireSafeBaseUrl,
+  requireSafeBaseUrlWithPort,
   workspacePath,
 } from "../src/common/env.js";
 
@@ -11,6 +12,7 @@ const previousValues = {
   ITOPS_TEST_PATH: process.env.ITOPS_TEST_PATH,
   ITOPS_TEST_MODE: process.env.ITOPS_TEST_MODE,
   ITOPS_TEST_CALLBACK: process.env.ITOPS_TEST_CALLBACK,
+  ITOPS_TEST_PORT: process.env.ITOPS_TEST_PORT,
 };
 
 afterEach(() => {
@@ -31,6 +33,8 @@ describe("environment security boundaries", () => {
   it("allows HTTP only for a loopback development endpoint", () => {
     process.env.ITOPS_TEST_URL = "http://127.0.0.1:8080";
     expect(requireSafeBaseUrl("ITOPS_TEST_URL").origin).toBe("http://127.0.0.1:8080");
+    process.env.ITOPS_TEST_URL = "http://[::1]:8080";
+    expect(requireSafeBaseUrl("ITOPS_TEST_URL").origin).toBe("http://[::1]:8080");
   });
 
   it("rejects credentials, query strings, and fragments in base URLs", () => {
@@ -40,6 +44,34 @@ describe("environment security boundaries", () => {
     expect(() => requireSafeBaseUrl("ITOPS_TEST_URL")).toThrow(/query string/i);
     process.env.ITOPS_TEST_URL = "https://production.example/#secret";
     expect(() => requireSafeBaseUrl("ITOPS_TEST_URL")).toThrow(/fragment/i);
+  });
+
+  it("applies a separately configured API port", () => {
+    process.env.ITOPS_TEST_URL = "https://splunk.example";
+    process.env.ITOPS_TEST_PORT = "9090";
+    expect(
+      requireSafeBaseUrlWithPort("ITOPS_TEST_URL", "ITOPS_TEST_PORT").origin,
+    ).toBe("https://splunk.example:9090");
+  });
+
+  it("preserves legacy embedded ports and rejects conflicting port settings", () => {
+    process.env.ITOPS_TEST_URL = "https://splunk.example:8089";
+    delete process.env.ITOPS_TEST_PORT;
+    expect(
+      requireSafeBaseUrlWithPort("ITOPS_TEST_URL", "ITOPS_TEST_PORT").port,
+    ).toBe("8089");
+    process.env.ITOPS_TEST_PORT = "9090";
+    expect(() =>
+      requireSafeBaseUrlWithPort("ITOPS_TEST_URL", "ITOPS_TEST_PORT"),
+    ).toThrow(/conflicts/i);
+  });
+
+  it("rejects invalid configured API ports", () => {
+    process.env.ITOPS_TEST_URL = "https://splunk.example";
+    process.env.ITOPS_TEST_PORT = "65536";
+    expect(() =>
+      requireSafeBaseUrlWithPort("ITOPS_TEST_URL", "ITOPS_TEST_PORT"),
+    ).toThrow(/1 and 65535/i);
   });
 
   it("confines configured local outputs to the workspace", () => {
@@ -65,5 +97,7 @@ describe("environment security boundaries", () => {
     expect(requireLoopbackUrl("ITOPS_TEST_CALLBACK").port).toBe("7778");
     process.env.ITOPS_TEST_CALLBACK = "https://outside.example/oauth/callback";
     expect(() => requireLoopbackUrl("ITOPS_TEST_CALLBACK")).toThrow(/loopback/i);
+    process.env.ITOPS_TEST_CALLBACK = "http://[::1]:7778/oauth/callback";
+    expect(requireLoopbackUrl("ITOPS_TEST_CALLBACK").port).toBe("7778");
   });
 });

@@ -9,7 +9,7 @@ Install:
 - Windows 11 with PowerShell 7 recommended
 - Node.js 22.12+ or Node.js 24 LTS
 - Git for Windows
-- Kiro CLI with the v3 engine
+- Kiro CLI 2.12.0 or newer with the v3 engine
 - Microsoft ODBC Driver 18 for SQL Server
 - a current Argo CD CLI
 - Windows `curl.exe` with SSPI/SPNEGO for Splunk Kerberos
@@ -20,7 +20,10 @@ Authenticate Kiro:
 irm 'https://cli.kiro.dev/install.ps1' | iex
 kiro-cli login
 kiro-cli whoami
+kiro-cli update --non-interactive
 ```
+
+The installer checks the installed semantic version. Version 2.12.0 is the minimum because the harness uses Kiro v3 Markdown agents, standalone hooks, capability permissions, subagents, inline MCP servers, and confidential-client remote MCP OAuth. Updating to the current Kiro release is recommended.
 
 ## 2. Fresh installation
 
@@ -94,6 +97,15 @@ notepad .\config\itops.env
 
 Replace only the values for the integrations you intend to enable. Leave an integration's `ITOPS_ENABLE_*` switch set to `false` until its read-only identity, TLS trust, network route, and allowlists are ready.
 
+For Splunk, configure the host and port independently:
+
+```dotenv
+SPLUNK_BASE_URL=https://splunk-rest.example.com
+SPLUNK_PORT=8089
+```
+
+Use `443` when an approved Kerberos reverse proxy terminates HTTPS on that port. The valid range is `1`–`65535`. Older files with `https://host:port` remain valid when `SPLUNK_PORT` is empty; if both are supplied, the values must match.
+
 Detailed identity and connection instructions:
 
 - [Authentication and Microsoft SSO](AUTHENTICATION.md)
@@ -165,5 +177,7 @@ If entries are missing, run the command without `-Check`, close the current Kiro
 Kiro resolves permissions as `deny` over `ask` over `allow`, so a restrictive workspace rule can override the exact user-level allowlist. Review that rule deliberately instead of adding a wildcard.
 
 If Splunk reports `maximum allowed nesting depth`, confirm that the repository is on version 1.3.1 or newer, rerun the installer, and open a fresh chat. The corrected harness exposes the dashboard panel collection through a flat `panelsJson` tool argument and validates the structured panels inside the MCP server.
+
+If Kiro reports an invalid hook trigger after upgrading, pull version 1.4.0 or newer. The v3 standalone session hook uses the documented `SessionStart` trigger rather than the legacy embedded-hook name `agentSpawn`/`AgentSpawn`.
 
 For Kerberos `401`/`403`, TLS, replica, OAuth, and vendor-specific failures, use the [operations troubleshooting guide](OPERATIONS.md#troubleshooting).

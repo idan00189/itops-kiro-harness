@@ -133,7 +133,7 @@ Also re-run:
 
 ```powershell
 kiro-cli agent validate --path .\.kiro\agents\itops-orchestrator.md
-kiro-cli chat --v3 --agent itops-orchestrator --require-mcp-startup
+kiro-cli chat --v3 --tui --agent itops-orchestrator --require-mcp-startup
 ```
 
 Kiro hot-reloads agent/MCP profile edits, but dependency or compiled server changes require `npm run build` and a session restart.
@@ -146,6 +146,7 @@ Kiro keeps permissions in `%USERPROFILE%\.kiro\settings\permissions.yaml`, outsi
 - Repeated subagent/tool approval: close the current chat, run `.\scripts\Set-ItOpsKiroPermissions.ps1 -Check`; if it reports missing entries, run the command without `-Check` and start a fresh chat. Do not solve this with `mcp:*`, shell, or filesystem wildcards.
 - `maximum allowed nesting depth` while calling Splunk: pull the current `main`, rerun `Install-ItOps.ps1`, and start a fresh chat. Version 1.3.1 exposes dashboard panels through the flat `panelsJson` argument so the entire Splunk MCP tool set stays inside provider schema-depth limits.
 - Splunk Kerberos failure: verify `curl.exe --version` lists SSPI/SPNEGO, the Windows ticket/SPN is valid, and the HTTPS endpoint returns `WWW-Authenticate: Negotiate`.
+- Splunk port failure: set `SPLUNK_BASE_URL=https://host` and `SPLUNK_PORT=1..65535`; if the URL already embeds a port, leave `SPLUNK_PORT` empty or make both values identical.
 - SQL replica refusal: verify the named profile, its host is the correct AG listener, its exact database participates in the AG, read-only routing is configured, and that profile's identity can execute the replica proof.
 - SQL connection required: call `sql_list_connections` and select the profile identified by the incident evidence.
 - Mongo database discovery failure: confirm the URI identity has `read` on at least one application database and the server supports `authorizedDatabases=true`.
@@ -158,5 +159,5 @@ Kiro keeps permissions in `%USERPROFILE%\.kiro\settings\permissions.yaml`, outsi
 - Subagent fails immediately: run the machine-local permission check, inspect `/mcp`, and verify that specialist's server startup.
 - Wiki result is missing: confirm the files are under `wiki\`, restart the Kiro session to refresh the auto-updated index, and inspect `/context show`.
 - Wiki result is stale or contradictory: preserve the conflict in the report and verify against immutable source/runtime evidence; do not silently edit the wiki.
-- Kiro environment issue: run `kiro-cli diagnostic`; some releases expose the older `kiro-cli doctor` name.
+- Kiro environment issue: run `kiro-cli doctor --all` for installation/configuration checks or `kiro-cli diagnostic --force` for a standalone diagnostic report.
 - Windows logs: Kiro writes under `%TEMP%\kiro-log\logs\kiro-chat.log`.
