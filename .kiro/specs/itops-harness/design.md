@@ -33,8 +33,8 @@ The private `wiki/` tree is an auto-updated `best` knowledge-base resource on th
 
 1. Vendor identity: read-only scopes/RBAC/roles; current Windows identity for Kerberos/integrated SQL; Microsoft/Entra federation only through supported SSO/OAuth flows.
 2. MCP surface: only read tools; report/XML writes are local and path constrained, and report writing is prompt-gated.
-3. Connection proof: SQL requests read intent and verifies the exact database is a read-only AG secondary before the pool and inside each batch.
-4. Input guards: SQL/SPL/Mongo allowlists, remote Dynatrace read scopes, Argo project/app allowlists, source repository/project allowlists, safe refs, and secret-path denials.
+3. Connection proof: every named SQL profile requests read intent and verifies its exact database is a read-only AG secondary before its isolated pool and inside each batch.
+4. Input guards: explicit database connection selectors, Mongo system-database denial and per-profile database/collection allowlists, SQL/SPL query allowlists, remote Dynatrace read scopes, Argo project/app allowlists, source repository/project allowlists, safe refs, and secret-path denials.
 5. Runtime bounds: timeouts, rows/documents/bytes, pool limits, TLS verification.
 6. Kiro policy: tool tags, isolated MCP permission rules, denied shell/fs_write/web.
 7. Hook policy: v3 `PreToolUse` blocking and metadata-only `PostToolUse` audit.
@@ -46,4 +46,4 @@ MCP outputs are recursively redacted and byte bounded. Audit records store times
 
 ## Failure behavior
 
-Missing configuration, placeholders, unsafe TLS, non-read scopes, query violations, HTTP limits, and vendor errors fail closed. The report records unavailable sources rather than bypassing controls.
+Missing/ambiguous connection selection, missing configuration, placeholders, unsafe TLS, non-read scopes, query violations, HTTP limits, and vendor errors fail closed. The report records unavailable sources rather than bypassing controls.

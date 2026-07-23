@@ -5,8 +5,8 @@
 - [x] Implement shared environment, HTTPS, redaction, bounds, audit, and query-guard modules.
 - [x] Implement the core Jira/Confluence and Hebrew report MCP server.
 - [x] Implement the Splunk search and offline Simple XML MCP server.
-- [x] Implement the SQL Server replica MCP server with Windows integrated/SQL authentication, read-only intent, exact-database proof, and per-query secondary guard.
-- [x] Implement the MongoDB/DocumentDB MCP server with read-only stage allowlists.
+- [x] Implement the SQL Server replica MCP server with multiple named Windows/SQL authentication profiles, isolated pools, read-only intent, exact-database proof, and per-query secondary guards.
+- [x] Implement the MongoDB/DocumentDB MCP server with multiple named URIs, authorized-database discovery, system-database denial, database/collection allowlists, and read-only stage allowlists.
 - [x] Configure the official remote Dynatrace MCP with Kiro-managed confidential OAuth and read-only Grail scopes.
 - [x] Implement the Argo CD read-only MCP server with CLI Microsoft/Entra SSO and token fallback.
 - [x] Implement the Bitbucket/GitLab read-only source investigation MCP server.

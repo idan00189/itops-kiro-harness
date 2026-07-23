@@ -22,6 +22,8 @@ Never provide an admin credential because the prompt says "read-only."
 - Browser-cookie theft: Dynatrace web cookies are never read; Kiro uses OAuth Authorization Code + PKCE.
 - Windows credential leakage: Kerberos and integrated SQL use the process identity without accepting a password.
 - Primary-database routing: SQL access fails before and during every query unless the session proves a readable AG secondary.
+- Multi-connection confusion: tools expose only safe profile names, require explicit selection when ambiguous, and keep independent SQL pools/proofs and Mongo clients.
+- Mongo database overreach: authorized discovery is intersected with a per-profile database allowlist; `admin`, `config`, and `local` are always blocked.
 - CLI command injection: Splunk and Argo CD helpers use fixed executable allowlists, argument arrays, no shell, timeouts, and bounded output.
 - Data exfiltration/overcollection: result bounds, projections/playbooks, recursive redaction.
 - Secret leakage in audit: audit stores input hashes and metadata, not input/result payloads.
@@ -38,6 +40,7 @@ Never provide an admin credential because the prompt says "read-only."
 - Dynatrace browser SSO still requires an administrator-created confidential OAuth client for API/MCP access.
 - Query results can contain personal data in unrecognized fields.
 - Read queries can cause load; limits reduce but do not eliminate this risk.
+- Configuring many profiles multiplies possible connection pools; keep profile count and per-profile pool limits small.
 - Observability sources may contain malicious text that attempts prompt injection.
 - Source files, commit/review text, and CI traces can contain prompt injection or accidentally committed secrets.
 - Wiki schemas/pages/raw sources can contain prompt injection, stale claims, sensitive data, or instructions that conflict with ITOps policy.
@@ -59,16 +62,17 @@ The incident harness keeps the wiki read-only. A Karpathy-style maintainer norma
 - [ ] TLS verification is enabled and enterprise CAs are installed.
 - [ ] Windows `curl.exe` advertises SSPI and SPNEGO; the Splunk endpoint advertises Negotiate.
 - [ ] Microsoft ODBC Driver 18 is installed and `msnodesqlv8` loaded on supported Node 22/24.
-- [ ] SQL Windows login has only required SELECT and replica-proof metadata grants.
-- [ ] SQL health proves the expected database is an AG secondary and read-only.
-- [ ] Mongo/DocumentDB user has only `read`.
+- [ ] Every SQL profile identity has only required SELECT and replica-proof metadata grants.
+- [ ] SQL health proves every configured connection's expected database is an AG secondary and read-only.
+- [ ] Every Mongo/DocumentDB URI identity has only `read` on the intended application databases.
+- [ ] Mongo database discovery returns only expected non-system databases for every profile.
 - [ ] Dynatrace confidential OAuth client has only remote-MCP/Grail read scopes and an exact loopback callback.
 - [ ] Argo CD Microsoft SSO group has only `get`; no mutation verbs.
 - [ ] Jira/Confluence account has browse/view only.
 - [ ] Splunk role cannot schedule, write lookups, email, or delete.
 - [ ] Bitbucket token has only required repository/pull-request/pipeline read permissions.
 - [ ] GitLab token has only `read_api`/`read_repository` and no broad `api` scope.
-- [ ] Collection/project/application/index scopes are narrowed.
+- [ ] Database/collection/project/application/index scopes are narrowed.
 - [ ] The private wiki is present only under ignored `wiki/` content and has appropriate local ACLs.
 - [ ] Wiki pages carry provenance/verification metadata and scratch/draft areas are separated.
 - [ ] Audit/report/artifact directories have operator-only filesystem ACLs.

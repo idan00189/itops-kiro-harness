@@ -1,14 +1,13 @@
 import { createRequire } from "node:module";
 import sql from "mssql";
 import { z } from "zod";
-import { assertReadOnlySql } from "../common/guards.js";
 import {
-  enabled,
-  env,
-  envBoolean,
-  envChoice,
-  envInteger,
-} from "../common/env.js";
+  loadSqlServerProfiles,
+  resolveConnection,
+  type SqlServerConnectionProfile,
+} from "../common/database-profiles.js";
+import { assertReadOnlySql } from "../common/guards.js";
+import { enabled, envInteger } from "../common/env.js";
 import { createServer, readOnlyAnnotations, runTool, startServer } from "../common/mcp.js";
 import {
   assertReadableSecondary,
@@ -19,11 +18,12 @@ import {
 const SERVER = "itops-sql-server";
 const server = createServer(
   SERVER,
-  "Read-only SQL Server Availability Group secondary access. Windows integrated or SQL authentication is supported. Every connection requests read-only intent and every investigation query fails unless the target is proven to be a readable secondary.",
+  "Named read-only SQL Server Availability Group secondary connections. Every connection requests read-only intent and every investigation query fails unless its exact target is proven to be a readable secondary.",
 );
 
-let poolPromise: Promise<sql.ConnectionPool> | undefined;
-let replicaProof: ReplicaProof | undefined;
+let profilesCache: SqlServerConnectionProfile[] | undefined;
+const poolPromises = new Map<string, Promise<sql.ConnectionPool>>();
+const replicaProofs = new Map<string, ReplicaProof>();
 const require = createRequire(import.meta.url);
 
 const REPLICA_PROOF_QUERY = `
@@ -53,12 +53,14 @@ function assertEnabled(): void {
   if (!enabled("SQLSERVER")) throw new Error("SQL Server integration is disabled");
 }
 
-function authMode(): "windows" | "sql" {
-  return envChoice("SQLSERVER_AUTH_MODE", ["windows", "sql"] as const, "windows");
+function profiles(): SqlServerConnectionProfile[] {
+  assertEnabled();
+  profilesCache ??= loadSqlServerProfiles();
+  return profilesCache;
 }
 
-function sqlDriver(): typeof sql {
-  if (authMode() === "sql") return sql;
+function sqlDriver(profile: SqlServerConnectionProfile): typeof sql {
+  if (profile.authMode === "sql") return sql;
   try {
     return require("mssql/msnodesqlv8") as typeof sql;
   } catch {
@@ -70,18 +72,7 @@ function sqlDriver(): typeof sql {
 
 type DriverConfig = sql.config & { connectionString?: string };
 
-function connectionConfig(): DriverConfig {
-  const host = env("SQLSERVER_HOST", { required: true });
-  const port = envInteger("SQLSERVER_PORT", 1433, 1, 65_535);
-  const database = env("SQLSERVER_DATABASE", { required: true });
-  if (!envBoolean("SQLSERVER_ENCRYPT", true)) {
-    throw new Error("SQLSERVER_ENCRYPT must remain true");
-  }
-  if (envBoolean("SQLSERVER_TRUST_SERVER_CERTIFICATE", false)) {
-    throw new Error(
-      "SQLSERVER_TRUST_SERVER_CERTIFICATE must remain false; install the issuing CA instead",
-    );
-  }
+function connectionConfig(profile: SqlServerConnectionProfile): DriverConfig {
   const common = {
     connectionTimeout: envInteger(
       "SQLSERVER_CONNECT_TIMEOUT_MS",
@@ -101,23 +92,22 @@ function connectionConfig(): DriverConfig {
       idleTimeoutMillis: 30_000,
     },
   };
-  if (authMode() === "windows") {
+  if (profile.authMode === "windows") {
     if (process.platform !== "win32") {
-      throw new Error("SQLSERVER_AUTH_MODE=windows requires the harness to run on Windows");
+      throw new Error(
+        `SQL Server connection ${profile.name} uses Windows authentication, which requires the harness to run on Windows`,
+      );
     }
     return {
       ...common,
-      server: host,
-      database,
+      server: profile.host,
+      database: profile.database,
       connectionString: buildWindowsReadOnlyConnectionString({
-        host,
-        port,
-        database,
-        driver: env("SQLSERVER_ODBC_DRIVER", {
-          defaultValue: "ODBC Driver 18 for SQL Server",
-          allowPlaceholder: true,
-        }),
-        multiSubnetFailover: envBoolean("SQLSERVER_MULTI_SUBNET_FAILOVER", true),
+        host: profile.host,
+        port: profile.port,
+        database: profile.database,
+        driver: profile.odbcDriver,
+        multiSubnetFailover: profile.multiSubnetFailover,
       }),
       options: {
         useUTC: true,
@@ -126,17 +116,17 @@ function connectionConfig(): DriverConfig {
   }
   return {
     ...common,
-    server: host,
-    port,
-    database,
-    user: env("SQLSERVER_USERNAME", { required: true }),
-    password: env("SQLSERVER_PASSWORD", { required: true }),
+    server: profile.host,
+    port: profile.port,
+    database: profile.database,
+    user: profile.username,
+    password: profile.password,
     options: {
       appName: "itops-readonly",
       encrypt: true,
       trustServerCertificate: false,
       readOnlyIntent: true,
-      multiSubnetFailover: envBoolean("SQLSERVER_MULTI_SUBNET_FAILOVER", true),
+      multiSubnetFailover: profile.multiSubnetFailover,
       enableArithAbort: true,
       useUTC: true,
       fallbackToDefaultDb: false,
@@ -144,34 +134,38 @@ function connectionConfig(): DriverConfig {
   };
 }
 
-async function createVerifiedPool(): Promise<sql.ConnectionPool> {
-  const driver = sqlDriver();
-  const pool = await new driver.ConnectionPool(connectionConfig()).connect();
+async function createVerifiedPool(
+  profile: SqlServerConnectionProfile,
+): Promise<sql.ConnectionPool> {
+  const driver = sqlDriver(profile);
+  const pool = await new driver.ConnectionPool(connectionConfig(profile)).connect();
   try {
     const result = await pool.request().query(REPLICA_PROOF_QUERY);
-    replicaProof = assertReadableSecondary(
+    const proof = assertReadableSecondary(
       (result.recordset?.[0] ?? undefined) as ReplicaProof | undefined,
-      env("SQLSERVER_DATABASE", { required: true }),
+      profile.database,
     );
+    replicaProofs.set(profile.name, proof);
     return pool;
   } catch (error) {
     await pool.close().catch(() => undefined);
     throw new Error(
-      `SQL Server replica verification failed before investigation access: ${
+      `SQL Server connection ${profile.name} replica verification failed before investigation access: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
   }
 }
 
-function getPool(): Promise<sql.ConnectionPool> {
-  assertEnabled();
+function getPool(profile: SqlServerConnectionProfile): Promise<sql.ConnectionPool> {
+  let poolPromise = poolPromises.get(profile.name);
   if (!poolPromise) {
-    poolPromise = createVerifiedPool().catch((error) => {
-      poolPromise = undefined;
-      replicaProof = undefined;
+    poolPromise = createVerifiedPool(profile).catch((error) => {
+      poolPromises.delete(profile.name);
+      replicaProofs.delete(profile.name);
       throw error;
     });
+    poolPromises.set(profile.name, poolPromise);
   }
   return poolPromise;
 }
@@ -188,18 +182,26 @@ function bindParameters(request: sql.Request, parameters: Record<string, Scalar>
 }
 
 async function executeBounded(
+  connection: string | undefined,
   query: string,
   parameters: Record<string, Scalar>,
   requestedRows: number,
-): Promise<{ rows: unknown[]; rowCount: number; truncated: boolean }> {
+): Promise<{
+  connection: string;
+  database: string;
+  rows: unknown[];
+  rowCount: number;
+  truncated: boolean;
+}> {
   const safeQuery = assertReadOnlySql(query);
   const maxRows = Math.min(
     requestedRows,
     envInteger("SQLSERVER_MAX_ROWS", 500, 1, 10_000),
   );
-  const pool = await getPool();
+  const profile = resolveConnection(profiles(), connection, "SQL Server");
+  const pool = await getPool(profile);
   const request = pool.request();
-  request.input("__itops_expected_database", env("SQLSERVER_DATABASE", { required: true }));
+  request.input("__itops_expected_database", profile.database);
   bindParameters(request, parameters);
   const result = await request.query(
     `${PER_QUERY_REPLICA_GUARD}
@@ -212,16 +214,42 @@ ${safeQuery};
 SET ROWCOUNT 0;`,
   );
   const rows = (result.recordset ?? []).slice(0, maxRows) as unknown[];
-  return { rows, rowCount: rows.length, truncated: rows.length >= maxRows };
+  return {
+    connection: profile.name,
+    database: profile.database,
+    rows,
+    rowCount: rows.length,
+    truncated: rows.length >= maxRows,
+  };
 }
+
+server.registerTool(
+  "sql_list_connections",
+  {
+    title: "List configured SQL Server connections",
+    description:
+      "List safe metadata for named SQL Server connections. Credentials and listener hostnames are never returned.",
+    inputSchema: z.object({}),
+    annotations: readOnlyAnnotations,
+  },
+  async (input) =>
+    runTool(SERVER, "sql_list_connections", input, async () => ({
+      connections: profiles().map((profile) => ({
+        name: profile.name,
+        database: profile.database,
+        authentication: profile.authMode,
+      })),
+    })),
+);
 
 server.registerTool(
   "sql_query",
   {
     title: "Query SQL Server replica (read-only)",
     description:
-      "Execute one bounded parameterized SELECT or CTE query. DML, DDL, procedures, SELECT INTO, and cross-database identifiers are rejected.",
+      "Execute one bounded parameterized SELECT or CTE query on a named connection. DML, DDL, procedures, SELECT INTO, and cross-database identifiers are rejected.",
     inputSchema: z.object({
+      connection: z.string().min(1).max(32).optional(),
       query: z.string().min(1).max(20_000),
       parameters: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).default({}),
       maxRows: z.number().int().min(1).max(10_000).default(500),
@@ -229,8 +257,12 @@ server.registerTool(
     annotations: readOnlyAnnotations,
   },
   async (input) =>
-    runTool(SERVER, "sql_query", { query: input.query, parameterNames: Object.keys(input.parameters) }, () =>
-      executeBounded(input.query, input.parameters, input.maxRows),
+    runTool(SERVER, "sql_query", {
+      connection: input.connection,
+      query: input.query,
+      parameterNames: Object.keys(input.parameters),
+    }, () =>
+      executeBounded(input.connection, input.query, input.parameters, input.maxRows),
     ),
 );
 
@@ -238,8 +270,10 @@ server.registerTool(
   "sql_list_schema",
   {
     title: "Inspect SQL Server schema (read-only)",
-    description: "List visible tables, columns, and data types from INFORMATION_SCHEMA.",
+    description:
+      "List visible tables, columns, and data types from INFORMATION_SCHEMA on a named connection.",
     inputSchema: z.object({
+      connection: z.string().min(1).max(32).optional(),
       schema: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,127}$/).optional(),
       maxRows: z.number().int().min(1).max(2_000).default(500),
     }),
@@ -249,6 +283,7 @@ server.registerTool(
     runTool(SERVER, "sql_list_schema", input, () => {
       const filter = input.schema ? "WHERE c.TABLE_SCHEMA = @schema" : "";
       return executeBounded(
+        input.connection,
         `SELECT c.TABLE_SCHEMA, c.TABLE_NAME, c.COLUMN_NAME, c.DATA_TYPE,
                 c.IS_NULLABLE, c.ORDINAL_POSITION
          FROM INFORMATION_SCHEMA.COLUMNS AS c
@@ -265,27 +300,44 @@ server.registerTool(
   {
     title: "Check SQL Server replica",
     description:
-      "Verify the SQL connection, database identity, encryption intent, and database updateability using a read-only query.",
-    inputSchema: z.object({}),
+      "Verify one or every named SQL connection, database identity, read-only intent, and replica role.",
+    inputSchema: z.object({
+      connection: z.string().min(1).max(32).optional(),
+    }),
     annotations: readOnlyAnnotations,
   },
   async (input) =>
     runTool(SERVER, "sql_health", input, async () => {
       if (!enabled("SQLSERVER")) return { status: "disabled", integration: "sqlserver" };
-      await getPool();
+      const selected = input.connection
+        ? [resolveConnection(profiles(), input.connection, "SQL Server")]
+        : profiles();
+      const connections = [];
+      for (const profile of selected) {
+        await getPool(profile);
+        connections.push({
+          name: profile.name,
+          database: profile.database,
+          authentication: profile.authMode,
+          applicationIntent: "ReadOnly",
+          replicaVerified: true,
+          proof: replicaProofs.get(profile.name),
+        });
+      }
       return {
         status: "ok",
-        authentication: authMode(),
-        applicationIntent: "ReadOnly",
-        replicaVerified: true,
-        proof: replicaProof,
+        connections,
       };
     }),
 );
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
-    void poolPromise?.then((pool) => pool.close()).finally(() => process.exit(0));
+    void Promise.all(
+      [...poolPromises.values()].map((poolPromise) =>
+        poolPromise.then((pool) => pool.close()).catch(() => undefined),
+      ),
+    ).finally(() => process.exit(0));
   });
 }
 

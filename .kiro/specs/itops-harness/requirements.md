@@ -44,7 +44,10 @@ WHEN a query attempts a mutation, side effect, unbounded result, disabled integr
 THE SYSTEM SHALL reject it before external execution.
 
 WHEN SQL Server is enabled
-THE SYSTEM SHALL require the configured database name, request `ApplicationIntent=ReadOnly`, and refuse all investigation access unless the connected database is proven to be the exact configured readable Availability Group secondary before use and within every query batch.
+THE SYSTEM SHALL support bounded named connection profiles, require explicit selection when several exist, request `ApplicationIntent=ReadOnly` for each, and refuse a profile's investigation access unless its connected database is proven to be the exact configured readable Availability Group secondary before use and within every query batch.
+
+WHEN multiple MongoDB or DocumentDB URIs are configured
+THE SYSTEM SHALL expose only their safe profile names, discover only non-system databases visible to each read-only identity using `authorizedDatabases=true`, apply per-profile database/collection allowlists, and require explicit connection/database selection when ambiguous.
 
 WHEN a source request targets a disallowed repository, unsafe ref, secret-bearing path, binary file, oversized response, or cross-origin link
 THE SYSTEM SHALL reject it before returning repository content.

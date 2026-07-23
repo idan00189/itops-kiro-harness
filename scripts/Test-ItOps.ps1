@@ -25,19 +25,45 @@ if (-not $SkipConnections) {
     & (Join-Path $PSScriptRoot "Initialize-ItOpsAuth.ps1") -EnvFile $EnvFile
     if ($LASTEXITCODE -ne 0) { throw "Interactive authentication initialization failed." }
 
-    $sqlAuthMode = if ([string]::IsNullOrWhiteSpace($env:SQLSERVER_AUTH_MODE)) {
-        "windows"
-    } else {
-        $env:SQLSERVER_AUTH_MODE.Trim().ToLowerInvariant()
+    $sqlUsesWindows = $false
+    if ($env:ITOPS_ENABLE_SQLSERVER -match "^(?i:true|1|yes|on)$") {
+        $sqlProfiles = @()
+        if (-not [string]::IsNullOrWhiteSpace($env:SQLSERVER_CONNECTIONS)) {
+            $sqlProfiles = $env:SQLSERVER_CONNECTIONS.Split(",") |
+                ForEach-Object { $_.Trim().ToUpperInvariant() } |
+                Where-Object { $_ }
+        }
+        if ($sqlProfiles.Count -eq 0) {
+            $sqlAuthMode = [Environment]::GetEnvironmentVariable(
+                "SQLSERVER_AUTH_MODE",
+                "Process"
+            )
+            $sqlUsesWindows = [string]::IsNullOrWhiteSpace($sqlAuthMode) -or
+                $sqlAuthMode.Trim().ToLowerInvariant() -eq "windows"
+        } else {
+            foreach ($profile in $sqlProfiles) {
+                $modeName = "SQLSERVER_{0}_AUTH_MODE" -f $profile
+                $sqlAuthMode = [Environment]::GetEnvironmentVariable($modeName, "Process")
+                if ([string]::IsNullOrWhiteSpace($sqlAuthMode) -or
+                    $sqlAuthMode.Trim().ToLowerInvariant() -eq "windows") {
+                    $sqlUsesWindows = $true
+                    break
+                }
+            }
+        }
     }
-    if ($env:ITOPS_ENABLE_SQLSERVER -match "^(?i:true|1|yes|on)$" -and
-        $sqlAuthMode -eq "windows") {
+    if ($sqlUsesWindows) {
         if (-not (Get-Command "Get-OdbcDriver" -ErrorAction SilentlyContinue)) {
             throw "Get-OdbcDriver is unavailable; verify Microsoft ODBC Driver 18 for SQL Server manually."
         }
-        $driver = Get-OdbcDriver -Name $env:SQLSERVER_ODBC_DRIVER -ErrorAction SilentlyContinue
+        $driverName = if ([string]::IsNullOrWhiteSpace($env:SQLSERVER_ODBC_DRIVER)) {
+            "ODBC Driver 18 for SQL Server"
+        } else {
+            $env:SQLSERVER_ODBC_DRIVER
+        }
+        $driver = Get-OdbcDriver -Name $driverName -ErrorAction SilentlyContinue
         if (-not $driver) {
-            throw "Required SQL ODBC driver '$($env:SQLSERVER_ODBC_DRIVER)' is not installed."
+            throw "Required SQL ODBC driver '$driverName' is not installed."
         }
     }
 

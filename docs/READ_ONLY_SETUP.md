@@ -17,7 +17,7 @@ The harness dispatches searches through `search/v2/jobs/export`; dispatching a q
 
 ## SQL Server
 
-Point `SQLSERVER_HOST` to an Availability Group listener configured for read-only routing and provide `SQLSERVER_DATABASE`. With `SQLSERVER_AUTH_MODE=windows`, the harness uses the Windows identity running Kiro through Microsoft ODBC Driver 18. The connection fixes `ApplicationIntent=ReadOnly` and verifies a readable secondary before the pool is exposed and before every query.
+For each name in `SQLSERVER_CONNECTIONS`, point `SQLSERVER_<NAME>_HOST` to an Availability Group listener configured for read-only routing and provide `SQLSERVER_<NAME>_DATABASE`. With a profile's `AUTH_MODE=windows`, the harness uses the Windows identity running Kiro through Microsoft ODBC Driver 18. Every profile gets an isolated pool, fixes `ApplicationIntent=ReadOnly`, and verifies its exact database is a readable secondary before the pool is exposed and before every query.
 
 Grant the Windows account only the required tables or schemas. It also needs `VIEW SERVER STATE` to prove the local AG role. A database administrator can adapt this example:
 
@@ -33,22 +33,27 @@ GRANT VIEW SERVER STATE TO [CORP\itops-user];
 
 Prefer grants on specific schemas/tables over `db_datareader` when the database contains unrelated sensitive data. Do not add the identity to an owner or write-capable role. The `VIEW SERVER STATE` grant is used only for the fail-closed replica proof; if policy forbids it, this harness intentionally cannot claim or use replica-only access. Keep TLS encryption on and install the SQL Server issuing CA rather than trusting the server certificate.
 
-Verify health reports `replicaVerified: true`, the expected database, `is_primary_replica: 0`, and `READ_ONLY`. Read-only intent helps routing, the database state prevents writes, and narrow Windows authorization remains the identity boundary.
+Repeat the user/grant setup for each configured database or use one Windows identity with equivalent narrow grants. A profile using SQL authentication must have its own read-only login variables. Verify health reports every connection name with `replicaVerified: true`, the expected database, `is_primary_replica: 0`, and `READ_ONLY`. Read-only intent helps routing, the database state prevents writes, and narrow authorization remains the identity boundary.
 
 ## MongoDB / Amazon DocumentDB
 
-Create a database-scoped user with the built-in `read` role:
+Create a user with the built-in `read` role on every application database that one named URI may expose:
 
 ```javascript
 use admin
 db.createUser({
   user: "itops_reader",
   pwd: "<generated secret>",
-  roles: [{ role: "read", db: "mobileapp" }]
+  roles: [
+    { role: "read", db: "mobileapp" },
+    { role: "read", db: "orders" }
+  ]
 })
 ```
 
 Do not grant `readWrite`, `dbAdmin`, `clusterManager`, or `root`. For monitoring metadata, add only separately justified read actions.
+
+Set `MONGODB_CONNECTIONS` to the URI profile names. For each profile, `DATABASE_ALLOWLIST=*` permits all non-system databases returned by `authorizedDatabases=true`; use exact names or patterns to narrow it. `admin`, `config`, and `local` are always blocked. The agent must explicitly select a connection and database when several exist.
 
 DocumentDB requires TLS and commonly uses:
 
@@ -56,9 +61,9 @@ DocumentDB requires TLS and commonly uses:
 tls=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false
 ```
 
-Set `MONGODB_TLS_CA_FILE` to the AWS/global CA bundle. Never use `tlsAllowInvalidCertificates=true` or `tlsInsecure=true`.
+Set the profile's `MONGODB_<NAME>_TLS_CA_FILE` to the AWS/global CA bundle. Never use `tlsAllowInvalidCertificates=true`, `tlsAllowInvalidHostnames=true`, or `tlsInsecure=true`.
 
-Narrow `MONGODB_COLLECTION_ALLOWLIST`; credential scope remains the primary control.
+Narrow each profile's `MONGODB_<NAME>_COLLECTION_ALLOWLIST`; credential scope remains the primary control.
 
 ## Dynatrace
 

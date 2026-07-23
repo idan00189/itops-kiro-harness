@@ -10,8 +10,8 @@ The orchestrator normally answers questions directly in Kiro chat. It writes a d
 |---|---|---|
 | `itops-orchestrator` | `itops-core` | Jira search/read, Confluence search/read, local report/XML artifact writes |
 | `itops-splunk` | `itops-splunk` | bounded log search, visible-index list, offline Simple XML generation |
-| `itops-sql-server` | `itops-sql-server` | parameterized SELECT/CTE after exact-database readable-secondary proof |
-| `itops-mongodb-docdb` | `itops-mongodb-docdb` | bounded find, read-only aggregation, schema sample |
+| `itops-sql-server` | `itops-sql-server` | named replica connections; parameterized SELECT/CTE after per-connection exact-database proof |
+| `itops-mongodb-docdb` | `itops-mongodb-docdb` | named URIs, authorized-database discovery, bounded find/aggregation/schema sample |
 | `itops-dynatrace` | official remote `dynatrace-platform` | Kiro OAuth + Microsoft SSO, bounded Grail analysis |
 | `itops-argocd` | `itops-argocd` | CLI SSO, applications, health/sync state, resource tree, drift, events |
 | `itops-source-code` | `itops-source-code` | allowlisted Bitbucket/GitLab trees, files, commits, diffs, reviews, and CI evidence |
@@ -123,72 +123,89 @@ Some Splunk deployments expect `SPLUNK_AUTH_SCHEME=Splunk`; use the scheme confi
 
 ### SQL Server readable replica
 
-Windows Integrated Authentication is the preferred mode:
+Configure one lowercase profile name per SQL connection. Each profile has its own listener, database, authentication mode, pool, and replica proof:
 
 ```dotenv
 ITOPS_ENABLE_SQLSERVER=true
-SQLSERVER_AUTH_MODE=windows
-SQLSERVER_HOST=ag-listener.example.com
-SQLSERVER_PORT=1433
-SQLSERVER_DATABASE=ExactMobileDatabaseName
+SQLSERVER_CONNECTIONS=mobile,orders
 SQLSERVER_ODBC_DRIVER=ODBC Driver 18 for SQL Server
-SQLSERVER_MULTI_SUBNET_FAILOVER=true
 SQLSERVER_ENCRYPT=true
 SQLSERVER_TRUST_SERVER_CERTIFICATE=false
+
+SQLSERVER_MOBILE_AUTH_MODE=windows
+SQLSERVER_MOBILE_HOST=mobile-ag-listener.example.com
+SQLSERVER_MOBILE_PORT=1433
+SQLSERVER_MOBILE_DATABASE=MobileDatabase
+SQLSERVER_MOBILE_MULTI_SUBNET_FAILOVER=true
+
+SQLSERVER_ORDERS_AUTH_MODE=windows
+SQLSERVER_ORDERS_HOST=orders-ag-listener.example.com
+SQLSERVER_ORDERS_PORT=1433
+SQLSERVER_ORDERS_DATABASE=OrdersDatabase
+SQLSERVER_ORDERS_MULTI_SUBNET_FAILOVER=true
 ```
 
-Install Microsoft ODBC Driver 18 and grant the current Windows user only `CONNECT`, `SELECT` on the required schemas/tables or views, and the minimum permission needed to read availability-group state (`VIEW SERVER STATE`, or the version-specific equivalent your DBA approves). Point `SQLSERVER_HOST` at the availability-group listener configured for read-only routing, and provide the exact database name.
+Profile names must match `[a-z][a-z0-9_]{0,31}` and are converted to uppercase only in variable names. A maximum of 16 connections is accepted. Install Microsoft ODBC Driver 18 and grant the current Windows user only `CONNECT`, `SELECT` on the required schemas/tables or views, and the minimum permission needed to read availability-group state (`VIEW SERVER STATE`, or the version-specific equivalent your DBA approves). Point every profile's `HOST` at the relevant availability-group listener and provide its exact database name.
 
-It is impossible to prove a server's replica role before opening a network connection. The harness therefore connects with `ApplicationIntent=ReadOnly`, immediately performs only its role proof, and closes/refuses the connection unless all of these are true:
+The specialist calls `sql_list_connections` and must include the selected `connection` in every schema/query call when several profiles exist. It never runs one query across all connections automatically.
 
-- the connected database name exactly matches `SQLSERVER_DATABASE`
+It is impossible to prove a server's replica role before opening a network connection. For each selected name, the harness connects with `ApplicationIntent=ReadOnly`, immediately performs only that profile's role proof, and closes/refuses its pool unless all of these are true:
+
+- the connected database name exactly matches that profile's configured database
 - the database participates in an availability group
 - the replica is not primary
 - the database is not writable
 
-The same proof is repeated in every query batch before the bounded, parameterized `SELECT` or CTE is executed. This follows Microsoft's [read-only routing and `ApplicationIntent`](https://learn.microsoft.com/en-us/sql/database-engine/availability-groups/windows/listeners-client-connectivity-application-failover) model. The harness cannot make an incorrectly privileged SQL login safe, so the login must still be read-only.
+The same connection-specific proof is repeated in every query batch before the bounded, parameterized `SELECT` or CTE is executed. This follows Microsoft's [read-only routing and `ApplicationIntent`](https://learn.microsoft.com/en-us/sql/database-engine/availability-groups/windows/listeners-client-connectivity-application-failover) model. The harness cannot make an incorrectly privileged SQL login safe, so every login must still be read-only.
 
-If Windows authentication is not possible, a dedicated SQL login is supported:
+If one profile cannot use Windows authentication, configure a dedicated read-only SQL login only for that profile:
 
 ```dotenv
-SQLSERVER_AUTH_MODE=sql
-SQLSERVER_USERNAME=itops_reader
-SQLSERVER_PASSWORD=REPLACE_ME
+SQLSERVER_ORDERS_AUTH_MODE=sql
+SQLSERVER_ORDERS_USERNAME=orders_reader
+SQLSERVER_ORDERS_PASSWORD=REPLACE_ME
 ```
 
-The replica proof remains mandatory in either mode. Do not enable the integration against a standalone database, a primary replica, a writable secondary, or an unknown database name.
+The replica proof remains mandatory in either mode. Do not configure a standalone database, primary replica, writable secondary, or unknown database name. Existing single-connection installations remain compatible when `SQLSERVER_CONNECTIONS` is omitted and the original unprefixed `SQLSERVER_HOST`, `SQLSERVER_DATABASE`, and authentication variables are used; that connection appears to the agent as `default`. Do not mix named and legacy connection variables—validation rejects the ambiguous configuration.
 
 ### MongoDB
 
-Create a database user with a read-only role on the one required database, restrict its network source, require TLS, and keep the collection allowlist narrow:
+Configure one named profile per URI. Each URI can expose all non-system databases visible to its read-only identity:
 
 ```dotenv
 ITOPS_ENABLE_MONGODB=true
-MONGODB_MODE=mongodb
-MONGODB_URI=mongodb://itops_reader:REPLACE_ME@mongo.example.com:27017/?tls=true
-MONGODB_DATABASE=mobile
-MONGODB_READ_PREFERENCE=secondaryPreferred
-MONGODB_COLLECTION_ALLOWLIST=orders,transactions,users
-MONGODB_TLS_CA_FILE=C:\certificates\enterprise-ca.pem
+MONGODB_CONNECTIONS=mobile,archive
+
+MONGODB_MOBILE_MODE=mongodb
+MONGODB_MOBILE_URI=mongodb://itops_reader:REPLACE_ME@mongo.example.com:27017/?tls=true&authSource=admin
+MONGODB_MOBILE_READ_PREFERENCE=secondaryPreferred
+MONGODB_MOBILE_DATABASE_ALLOWLIST=*
+MONGODB_MOBILE_COLLECTION_ALLOWLIST=orders,transactions,users
+MONGODB_MOBILE_TLS_CA_FILE=C:\certificates\enterprise-ca.pem
 ```
 
-The driver disables retryable writes, applies the configured read preference, and exposes only bounded find, safe aggregation, and schema-sampling tools. Review MongoDB's [connection-string and read-preference options](https://www.mongodb.com/docs/manual/reference/connection-string-options/). Percent-encode reserved characters in URI usernames and passwords.
+`MONGODB_<NAME>_DATABASE_ALLOWLIST=*` means every database returned by `listDatabases` with `authorizedDatabases=true`, except `admin`, `config`, and `local`, which the harness always blocks. The identity must have the built-in `read` role on each application database it should expose. You can narrow the setting to comma-separated exact names or wildcard patterns such as `mobile_*`.
+
+The specialist first uses `mongodb_list_connections`, then `mongodb_list_databases`. When several connections or databases exist, every collection/find/aggregation call must identify both values explicitly. A question is never broadcast across every URI or database automatically. MongoDB documents that [`authorizedDatabases=true`](https://www.mongodb.com/docs/manual/reference/command/listdatabases/) returns only databases for which the user has privileges.
+
+The driver disables retryable writes, applies each profile's read preference, and exposes only bounded find, safe aggregation, database/collection listing, and schema-sampling tools. Review MongoDB's [connection-string and read-preference options](https://www.mongodb.com/docs/manual/reference/connection-string-options/). Percent-encode reserved characters in URI usernames and passwords.
 
 ### Amazon DocumentDB
 
-The DocumentDB cluster must be reachable from the Windows PC through the approved VPN/VPC route, security groups, and DNS. Download the current AWS CA bundle and configure a read-only database user:
+Add DocumentDB as another named URI profile. The cluster must be reachable from the Windows PC through the approved VPN/VPC route, security groups, and DNS. Download the current AWS CA bundle and grant the identity `read` on every application database the harness may inspect:
 
 ```dotenv
-ITOPS_ENABLE_MONGODB=true
-MONGODB_MODE=documentdb
-MONGODB_URI=mongodb://itops_reader:REPLACE_ME@cluster.cluster-xxxxxxxxxxxx.eu-west-1.docdb.amazonaws.com:27017/?tls=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false
-MONGODB_DATABASE=mobile
-MONGODB_READ_PREFERENCE=secondaryPreferred
-MONGODB_COLLECTION_ALLOWLIST=orders,transactions,users
-MONGODB_TLS_CA_FILE=C:\certificates\global-bundle.pem
+MONGODB_ARCHIVE_MODE=documentdb
+MONGODB_ARCHIVE_URI=mongodb://itops_reader:REPLACE_ME@cluster.cluster-xxxxxxxxxxxx.eu-west-1.docdb.amazonaws.com:27017/?tls=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false
+MONGODB_ARCHIVE_READ_PREFERENCE=secondaryPreferred
+MONGODB_ARCHIVE_DATABASE_ALLOWLIST=*
+MONGODB_ARCHIVE_COLLECTION_ALLOWLIST=orders,transactions,users
+MONGODB_ARCHIVE_TLS_CA_FILE=C:\certificates\global-bundle.pem
 ```
 
-Use the cluster endpoint and AWS's documented [TLS, replica-set, and read-preference parameters](https://docs.aws.amazon.com/documentdb/latest/devguide/connect_programmatically.html). Percent-encode reserved credential characters. Do not add TLS-insecure options; runtime validation rejects them.
+Amazon DocumentDB 4.0 and 5.0 support authorized database discovery for users with per-database permissions; see AWS's [role-based access control](https://docs.aws.amazon.com/documentdb/latest/devguide/role_based_access_control.html). Use the cluster endpoint and AWS's documented [TLS, replica-set, and read-preference parameters](https://docs.aws.amazon.com/documentdb/latest/devguide/connect_programmatically.html). Percent-encode reserved credential characters. Do not add TLS-insecure options; runtime validation rejects them.
+
+Existing single-URI installations remain compatible when `MONGODB_CONNECTIONS` is omitted and the unprefixed `MONGODB_URI`, `MONGODB_DATABASE`, and related variables are used. That URI appears as connection `default` and its one configured database is selected automatically. Named and legacy URI variables cannot be mixed.
 
 ### Dynatrace with Microsoft login
 
@@ -400,7 +417,7 @@ The one template is [config/itops.env.example](config/itops.env.example). Every 
 
 Authentication is also selected in this file. Defaults are Windows Kerberos for Splunk, Windows Integrated Authentication for SQL Server, Argo CD CLI SSO, and Kiro-managed Dynatrace OAuth. Jira, Confluence, Bitbucket, and GitLab use their configured read-only API/access tokens.
 
-For private certificate authorities, set `NODE_EXTRA_CA_CERTS` or `MONGODB_TLS_CA_FILE`. Do not set `SQLSERVER_TRUST_SERVER_CERTIFICATE=true` or use MongoDB TLS-insecure URI options; runtime validation rejects them.
+For private certificate authorities, set `NODE_EXTRA_CA_CERTS` or each profile's `MONGODB_<NAME>_TLS_CA_FILE` (legacy single-URI setups use `MONGODB_TLS_CA_FILE`). Do not set `SQLSERVER_TRUST_SERVER_CERTIFICATE=true` or use MongoDB TLS-insecure URI options; runtime validation rejects them.
 
 For Kiro user settings, the installer has an optional switch:
 

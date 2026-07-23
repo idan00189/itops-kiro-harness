@@ -86,7 +86,8 @@ Shared controls:
 - audit with input SHA-256, not input content
 - TLS verification; private CA support instead of insecure switches
 - Splunk Kerberos through a fixed `curl.exe` SSPI/SPNEGO child process without a shell
-- SQL Windows Integrated Authentication with immutable read intent and per-query readable-secondary proof
+- named SQL connection pools with Windows/SQL authentication, immutable read intent, and connection-specific per-query readable-secondary proof
+- named MongoDB/DocumentDB clients with authorized-database discovery, fixed system-database denial, and database/collection allowlists
 - Argo CD SSO token retrieval through fixed, read-only CLI commands
 - Dynatrace browser OAuth handled by Kiro against the official remote MCP
 - tool annotations declaring external reads or narrow local writes
