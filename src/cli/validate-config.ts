@@ -351,6 +351,7 @@ async function validateLayout(): Promise<void> {
     "AGENTS.md",
     "README.md",
     "config/itops.env.example",
+    "docs/INSTALLATION.md",
     "docs/AUTHENTICATION.md",
     "scripts/Initialize-ItOpsAuth.ps1",
     "scripts/Set-ItOpsKiroPermissions.ps1",
