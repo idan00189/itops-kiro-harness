@@ -18,22 +18,6 @@ resources:
     indexType: best
     autoUpdate: true
   - skill://.kiro/skills/itops-orchestrate/SKILL.md
-toolsSettings:
-  subagent:
-    availableAgents:
-      - "itops-splunk"
-      - "itops-sql-server"
-      - "itops-mongodb-docdb"
-      - "itops-dynatrace"
-      - "itops-argocd"
-      - "itops-source-code"
-    trustedAgents:
-      - "itops-splunk"
-      - "itops-sql-server"
-      - "itops-mongodb-docdb"
-      - "itops-dynatrace"
-      - "itops-argocd"
-      - "itops-source-code"
 permissions:
   rules:
     - capability: fs_read

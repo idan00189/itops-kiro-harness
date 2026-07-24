@@ -1,8 +1,4 @@
 [CmdletBinding()]
-param(
-    [switch]$ConfigureKiroSettings
-)
-
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 if (Test-Path -LiteralPath "variable:PSNativeCommandUseErrorActionPreference") {
@@ -27,9 +23,14 @@ if ($LASTEXITCODE -ne 0 -or $kiroVersionOutput -notmatch "(\d+\.\d+\.\d+)") {
     throw "Could not determine the installed Kiro CLI version."
 }
 $kiroVersion = [Version]$Matches[1]
-$minimumKiroVersion = [Version]"2.12.0"
-if ($kiroVersion -lt $minimumKiroVersion) {
-    throw "Kiro CLI $minimumKiroVersion or newer is required for the v3 agent format and confidential-client MCP OAuth. Found $kiroVersion. Run 'kiro-cli update --non-interactive' and rerun this installer."
+$minimumV3KiroVersion = [Version]"2.12.0"
+if ($kiroVersion -lt $minimumV3KiroVersion) {
+    throw "Kiro CLI $minimumV3KiroVersion or newer is required for the v3 agent format and confidential-client MCP OAuth. Found $kiroVersion. Run 'kiro-cli update --non-interactive' and rerun this installer."
+}
+
+$chatHelp = (& kiro-cli chat --help | Out-String)
+if ($LASTEXITCODE -ne 0 -or $chatHelp -notmatch "--v3" -or $chatHelp -notmatch "--tui") {
+    throw "The installed Kiro CLI does not expose the v3 engine and TUI flags. Update Kiro and rerun this installer."
 }
 
 $nodeVersion = (& node -p "process.versions.node").Trim()
@@ -62,37 +63,22 @@ if (-not (Test-Path -LiteralPath $environmentPath)) {
 if ($LASTEXITCODE -ne 0) { throw "npm ci failed." }
 
 & npm run verify
-if ($LASTEXITCODE -ne 0) { throw "Harness verification failed." }
-
-& (Join-Path $PSScriptRoot "Set-ItOpsKiroPermissions.ps1")
-if ($LASTEXITCODE -ne 0) {
-    throw "Kiro's machine-local ITOps permissions could not be configured."
-}
+if ($LASTEXITCODE -ne 0) { throw "Kiro v3 pack verification failed." }
 
 Get-ChildItem -LiteralPath ".kiro\agents" -Filter "*.md" | ForEach-Object {
-    & kiro-cli agent validate --path $_.FullName
-    if ($LASTEXITCODE -ne 0) { throw "Kiro rejected agent profile $($_.Name)." }
+    & kiro-cli --v3 agent validate --path $_.FullName
+    if ($LASTEXITCODE -ne 0) { throw "Kiro v3 rejected agent profile $($_.Name)." }
 }
 
-if ($ConfigureKiroSettings) {
-    & kiro-cli settings chat.enableKnowledge true
-    if ($LASTEXITCODE -ne 0) { throw "Could not enable Kiro knowledge support." }
-    & kiro-cli settings toolSearch.enabled true
-    if ($LASTEXITCODE -ne 0) { throw "Could not enable Kiro Tool Search." }
-    & kiro-cli settings --workspace chat.disableInheritingDefaultResources true
-    if ($LASTEXITCODE -ne 0) { throw "Could not isolate custom-agent resources for this workspace." }
-    Write-Host "Enabled Kiro knowledge, on-demand MCP Tool Search, and isolated custom-agent resources."
-}
-
-& kiro-cli doctor --all
+& kiro-cli diagnostic --force --format json
 if ($LASTEXITCODE -ne 0) {
-    Write-Warning "Kiro's doctor reported one or more environment warnings. Review them before starting ITOps."
+    Write-Warning "Kiro v3 diagnostics reported one or more environment warnings. Review them before starting ITOps."
 }
 
 Write-Host ""
 Write-Host "Installation complete."
-Write-Host "Validated Kiro CLI $kiroVersion with the v3 agent, permission, hook, subagent, and MCP configuration."
-Write-Host "Kiro now trusts only the exact ITOps subagents and MCP tools (external reads plus constrained local report/XML writes)."
+Write-Host "Validated Kiro CLI $kiroVersion using its v3 agent, permission, hook, subagent, and MCP configuration."
+Write-Host "Kiro v3 receives exact subagent/MCP permissions from the checked-in agent profiles; no machine-wide trust file is modified."
 Write-Host "1. Edit config\itops.env with read-only credentials."
 Write-Host "2. Run .\scripts\Initialize-ItOpsAuth.ps1 for Microsoft/Argo CD SSO."
 Write-Host "3. Run .\scripts\Test-ItOps.ps1."

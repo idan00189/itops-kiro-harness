@@ -1,6 +1,6 @@
 # ITOps workspace instructions
 
-This workspace is a production incident investigation harness for a mobile application.
+This workspace is a Kiro CLI v3 production incident investigation pack for a mobile application. Kiro itself is the runtime harness.
 
 ## Non-negotiable safety
 

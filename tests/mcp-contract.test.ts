@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ITOPS_TRUSTED_MCP_TOOLS } from "../src/cli/configure-kiro-permissions.js";
+import { ITOPS_V3_MCP_TOOLS } from "../src/kiro/contract.js";
 
 type RunningMcp = {
   client: Client;
@@ -128,7 +128,7 @@ describe("compiled MCP protocol contracts", () => {
       const running = await connect(serverPath);
       try {
         const response = await running.client.listTools();
-        const expected = ITOPS_TRUSTED_MCP_TOOLS.filter((tool) =>
+        const expected = ITOPS_V3_MCP_TOOLS.filter((tool) =>
           tool.startsWith(`${serverName}/`),
         )
           .map((tool) => tool.slice(serverName.length + 1))

@@ -18,12 +18,7 @@ if (-not (Test-Path -LiteralPath $EnvFile)) {
 Import-ItOpsEnv -Path $EnvFile
 
 if (-not (Test-Path -LiteralPath "dist\mcp\core.js")) {
-    throw "The harness is not built. Run .\scripts\Install-ItOps.ps1 first."
-}
-
-& node "dist\cli\configure-kiro-permissions.js" "--check"
-if ($LASTEXITCODE -ne 0) {
-    throw "Kiro ITOps permissions are incomplete. Run .\scripts\Set-ItOpsKiroPermissions.ps1 once on this PC."
+    throw "The MCP servers are not built. Run .\scripts\Install-ItOps.ps1 first."
 }
 
 & node "dist\cli\validate-config.js" "--runtime"
@@ -32,5 +27,5 @@ if ($LASTEXITCODE -ne 0) { throw "Runtime configuration validation failed." }
 & (Join-Path $PSScriptRoot "Initialize-ItOpsAuth.ps1") -EnvFile $EnvFile
 if ($LASTEXITCODE -ne 0) { throw "Interactive authentication initialization failed." }
 
-& kiro-cli chat --v3 --tui --agent itops-orchestrator --require-mcp-startup
+& kiro-cli --v3 --tui --agent itops-orchestrator --require-mcp-startup
 exit $LASTEXITCODE

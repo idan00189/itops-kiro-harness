@@ -21,11 +21,6 @@ Import-ItOpsEnv -Path $EnvFile
 & npm run verify
 if ($LASTEXITCODE -ne 0) { throw "Static verification failed." }
 
-& node "dist\cli\configure-kiro-permissions.js" "--check"
-if ($LASTEXITCODE -ne 0) {
-    throw "Kiro ITOps permissions are incomplete. Run .\scripts\Set-ItOpsKiroPermissions.ps1 once on this PC."
-}
-
 & node "dist\cli\validate-config.js" "--runtime"
 if ($LASTEXITCODE -ne 0) { throw "Runtime configuration validation failed." }
 

@@ -11,17 +11,17 @@
 - [x] Implement the Argo CD read-only MCP server with CLI Microsoft/Entra SSO and token fallback.
 - [x] Implement the Bitbucket/GitLab read-only source investigation MCP server.
 - [x] Create seven Kiro v3 agent profiles and seven Agent Skills.
-- [x] Make the orchestrator the sole user-facing agent and allow/trust only the six custom specialists.
+- [x] Make the orchestrator the sole user-facing Kiro v3 agent and allow only the six named specialists through inline v3 permissions.
 - [x] Add direct-chat default behavior and gate report creation to explicit/full investigations.
 - [x] Add private Karpathy-style wiki indexing, provenance policy, and Git-leak protection.
 - [x] Add v3 hooks, steering, AGENTS.md, and the empty wiki folder.
 - [x] Add one environment template and Windows PowerShell workflows.
 - [x] Add Splunk Windows Kerberos/SPNEGO, Argo CD SSO initialization, and authentication-mode validation.
-- [x] Add exact machine-local Kiro subagent/MCP permission installation, backup, validation, and removal.
+- [x] Remove machine-local permission mutation; validate portable inline v3 agent permissions instead.
 - [x] Flatten the public Splunk dashboard tool schema and retain strict internal panel validation.
 - [x] Flatten the public report-write schema and retain strict internal incident-report validation.
 - [x] Require exact deployed full commit SHAs for all Bitbucket/GitLab source and CI evidence reads.
 - [x] Replace the agent-loop session hook with deterministic v3 `SessionStart` policy context.
 - [x] Install pinned dependencies and produce the lockfile.
-- [x] Run compilation, 118 unit/guard/runtime tests, compiled MCP protocol tests, mocked HTTP integration tests, structural/skill validation, dependency audit, UTF-8 output-bound checks, evidence-integrity checks, and secret scan.
+- [x] Run compilation, 118 unit/guard/runtime/Kiro-v3-contract tests, compiled MCP protocol tests, mocked HTTP integration tests, structural/skill validation, dependency audit, UTF-8 output-bound checks, evidence-integrity checks, and secret scan.
 - [ ] Run live connection health checks after the operator supplies credentials.

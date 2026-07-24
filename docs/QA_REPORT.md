@@ -1,8 +1,8 @@
 # ITOps harness QA report
 
-Date: 2026-07-23
+Date: 2026-07-24
 
-Release candidate: 1.5.1
+Release candidate: 1.6.0
 
 Scope: repository implementation, Kiro CLI v3 configuration, local MCP protocol, read-only controls, report/artifact generation, mocked vendor HTTP contracts, dependency security, and Windows automation.
 
@@ -17,7 +17,7 @@ This distinction is important: mocked and fail-closed tests establish harness be
 | Area | Result | Evidence |
 | --- | --- | --- |
 | TypeScript build | PASS | Clean Node 24.14 build with strict TypeScript settings |
-| Unit and guard behavior | PASS | 118 tests across 15 files covering SQL, SPL, MongoDB, source, URL, redaction, replica, report, XML, permission, hook, profile, and runtime configuration behavior |
+| Unit and guard behavior | PASS | 118 tests across 15 files covering SQL, SPL, MongoDB, source, URL, redaction, replica, report, XML, hook, profile, Kiro v3 contract, and runtime configuration behavior |
 | Compiled MCP protocol | PASS | All six local stdio servers launched through the MCP SDK; public tool lists exactly matched the trusted allowlist |
 | Tool annotations | PASS | External/local read tools are non-destructive and read-only; only the two constrained local writers have `readOnlyHint=false` |
 | Local artifacts | PASS | Markdown, RTL HTML, and safe Splunk Simple XML were generated and persisted inside workspace-confined directories |
@@ -30,7 +30,7 @@ This distinction is important: mocked and fail-closed tests establish harness be
 | Kiro v3 hooks | PASS | Standalone v1/PascalCase format validated; command hooks executed; malformed input failed closed; audit omitted payloads |
 | Kiro v3 skills | PASS | All seven skill folders passed the skill validator and repository structural validation |
 | Runtime environment validation | PASS | The compiled CLI accepted a complete multi-integration read-only configuration without connecting and rejected missing, cleartext, TLS-insecure, wrong-path, and inconsistent-bound configurations |
-| Kiro permission reconciliation | PASS | Merge, backup/state, exact trust, restrictive-rule detection, and removal behavior covered |
+| Kiro v3 profile permissions | PASS | Every profile uses v3 tags and inline `permissions.rules`; exact specialist/MCP allowlists and shell/fs/web denials are structurally validated |
 | Static security | PASS | Tracked operational outputs, private wiki pages, credential file types, and high-confidence secret signatures rejected |
 | Dependency security | PASS | `npm audit --omit=dev --audit-level=high` returned zero vulnerabilities |
 | Dependency currency | PASS | All production dependencies were current on the QA date; newer TypeScript/Node type packages were major versions outside the supported Node 22/24 line |
@@ -48,6 +48,7 @@ This distinction is important: mocked and fail-closed tests establish harness be
 9. A report could reference missing evidence, duplicate evidence IDs, or mark a root cause verified without evidence. Strict validation now rejects all three conditions.
 10. SQL queries beginning with `SELECT` could still advance a sequence or request update/exclusive locks. The read-only guard now rejects sequence advancement and operationally intrusive lock hints.
 11. Splunk searches could invoke write-producing metric commands or hide effective SPL inside macros, saved searches, prior jobs, REST, or DB Connect. These commands now fail closed before any vendor request.
+12. The installer mutated a machine-wide Kiro permission file and the orchestrator used legacy `toolsSettings` subagent configuration. Kiro CLI v3 is now the sole runtime: exact delegation/MCP permissions live in the checked-in v3 profiles, setup never edits Kiro settings, and startup uses `kiro-cli --v3 --tui`.
 
 ## Current Kiro v3 compatibility
 

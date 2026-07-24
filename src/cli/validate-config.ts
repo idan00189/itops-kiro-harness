@@ -22,9 +22,9 @@ import {
   assertGitLabProject,
 } from "../common/source-guards.js";
 import {
-  ITOPS_TRUSTED_MCP_TOOLS,
-  ITOPS_TRUSTED_SUBAGENTS,
-} from "./configure-kiro-permissions.js";
+  ITOPS_V3_MCP_TOOLS,
+  ITOPS_V3_SPECIALIST_AGENTS,
+} from "../kiro/contract.js";
 
 const root = process.cwd();
 const runtime = process.argv.includes("--runtime");
@@ -70,13 +70,13 @@ async function validateAgents(): Promise<void> {
   ]);
   const files = (await readdir(directory)).filter((file) => file.endsWith(".md"));
   check(
-    specialistAgents.length === ITOPS_TRUSTED_SUBAGENTS.length &&
+    specialistAgents.length === ITOPS_V3_SPECIALIST_AGENTS.length &&
       specialistAgents.every((name) =>
-        ITOPS_TRUSTED_SUBAGENTS.includes(
-          name as (typeof ITOPS_TRUSTED_SUBAGENTS)[number],
+        ITOPS_V3_SPECIALIST_AGENTS.includes(
+          name as (typeof ITOPS_V3_SPECIALIST_AGENTS)[number],
         ),
       ),
-    "Machine-local trusted subagents must match the six specialist profiles",
+    "The Kiro v3 subagent contract must match the six specialist profiles",
   );
   check(files.length === expected.size, `Expected ${expected.size} agent profiles, found ${files.length}`);
   for (const name of expected) check(files.includes(name), `Missing agent profile ${name}`);
@@ -87,6 +87,7 @@ async function validateAgents(): Promise<void> {
       const config = frontmatter(profile);
       const tools = Array.isArray(config.tools) ? config.tools.map(String) : [];
       check(tools.includes("@mcp"), `${file}: tools must include @mcp`);
+      check(config.toolsSettings === undefined, `${file}: v3 profile must not use legacy toolsSettings`);
       check(config.includeMcpJson === false, `${file}: includeMcpJson must be false`);
       check(!tools.includes("read"), `${file}: generic read tools must remain disabled`);
       check(!tools.some((tool) => ["write", "shell", "web", "*", "@builtin"].includes(tool)), `${file}: unsafe tool tag`);
@@ -95,25 +96,14 @@ async function validateAgents(): Promise<void> {
         `${file}: invalid subagent capability`,
       );
       if (file === "itops-orchestrator.md") {
-        const toolSettings = config.toolsSettings as
-          | {
-              subagent?: {
-                availableAgents?: unknown[];
-                trustedAgents?: unknown[];
-              };
-            }
-          | undefined;
-        const available = (toolSettings?.subagent?.availableAgents ?? []).map(String);
-        const trusted = (toolSettings?.subagent?.trustedAgents ?? []).map(String);
+        const permissions = config.permissions as { rules?: Array<Record<string, unknown>> } | undefined;
+        const subagentMatches = (permissions?.rules ?? [])
+          .filter((rule) => rule.capability === "subagent" && rule.effect === "allow")
+          .flatMap((rule) => Array.isArray(rule.match) ? rule.match.map(String) : []);
         check(
-          available.length === specialistAgents.length &&
-            specialistAgents.every((name) => available.includes(name)),
-          `${file}: availableAgents must contain only the six ITOps specialists`,
-        );
-        check(
-          trusted.length === specialistAgents.length &&
-            specialistAgents.every((name) => trusted.includes(name)),
-          `${file}: trustedAgents must contain only the six read-only ITOps specialists`,
+          subagentMatches.length === specialistAgents.length &&
+            specialistAgents.every((name) => subagentMatches.includes(name)),
+          `${file}: v3 permissions must allow only the six ITOps specialists`,
         );
         const resources = Array.isArray(config.resources) ? config.resources : [];
         const wikiKnowledgeBase = resources.find(
@@ -211,17 +201,17 @@ async function validateAgents(): Promise<void> {
         );
       const server = servers[0];
       if (server) {
-        const machineTrustedForServer = ITOPS_TRUSTED_MCP_TOOLS.filter(
+        const contractToolsForServer = ITOPS_V3_MCP_TOOLS.filter(
           (tool) => tool.startsWith(`${server}/`),
         );
         check(
-          mcpMatches.length === machineTrustedForServer.length &&
+          mcpMatches.length === contractToolsForServer.length &&
             mcpMatches.every((tool) =>
-              machineTrustedForServer.includes(
-                tool as (typeof ITOPS_TRUSTED_MCP_TOOLS)[number],
+              contractToolsForServer.includes(
+                tool as (typeof ITOPS_V3_MCP_TOOLS)[number],
               ),
             ),
-          `${file}: exact MCP rules must match the machine-local ITOps trust list`,
+          `${file}: exact MCP rules must match the Kiro v3 MCP contract`,
         );
         check(
           !mcpMatches.some((tool) => tool.includes("*")),
@@ -386,11 +376,11 @@ async function validateLayout(): Promise<void> {
     "README.md",
     "config/itops.env.example",
     "docs/INSTALLATION.md",
+    "docs/KIRO_V3.md",
     "docs/AUTHENTICATION.md",
     ".github/workflows/ci.yml",
     "scripts/Initialize-ItOpsAuth.ps1",
     "scripts/Start-ItOps.ps1",
-    "scripts/Set-ItOpsKiroPermissions.ps1",
     "scripts/hooks/session-policy.mjs",
     "wiki/.gitkeep",
     ".kiro/steering/product.md",
@@ -429,14 +419,14 @@ async function validateLayout(): Promise<void> {
   const startScript = await readFile(resolve(root, "scripts/Start-ItOps.ps1"), "utf8");
   check(
     startScript.includes(
-      "kiro-cli chat --v3 --tui --agent itops-orchestrator --require-mcp-startup",
+      "kiro-cli --v3 --tui --agent itops-orchestrator --require-mcp-startup",
     ),
     "Start script must force the v3 TUI, orchestrator agent, and MCP startup gate",
   );
   const installScript = await readFile(resolve(root, "scripts/Install-ItOps.ps1"), "utf8");
   check(
-    installScript.includes('$minimumKiroVersion = [Version]"2.12.0"'),
-    "Installer must enforce the minimum Kiro version needed for remote MCP OAuth",
+    installScript.includes("--v3") && installScript.includes("agent validate"),
+    "Installer must validate profiles with the Kiro v3 engine",
   );
 }
 

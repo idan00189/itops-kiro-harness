@@ -1,6 +1,6 @@
-# ITOps — Kiro CLI v3 incident investigation harness
+# ITOps — Kiro CLI v3 incident investigation pack
 
-ITOps is a Windows-first, production-oriented conversational assistant and multi-agent investigation harness for mobile-application operations across Splunk, SQL Server, MongoDB/Amazon DocumentDB, Dynatrace, Argo CD, Bitbucket Cloud, GitLab, Jira, Confluence, and a local Markdown wiki.
+Kiro CLI v3 is the runtime harness. This repository is a portable configuration and integration pack: seven Kiro v3 Markdown agents, seven Agent Skills, standalone v3 hooks, steering/wiki resources, and read-only MCP servers for mobile-application operations across Splunk, SQL Server, MongoDB/Amazon DocumentDB, Dynatrace, Argo CD, Bitbucket Cloud, GitLab, Jira, and Confluence. It does not implement a second chat loop, scheduler, subagent runtime, or approval system.
 
 The orchestrator normally answers questions directly in Kiro chat. It writes a detailed Hebrew Markdown report only when you request a report or a full investigation/RCA; self-contained RTL HTML is available when explicitly requested. It never performs remediation.
 
@@ -16,13 +16,13 @@ The orchestrator normally answers questions directly in Kiro chat. It writes a d
 | `itops-argocd` | `itops-argocd` | CLI SSO, applications, health/sync state, resource tree, drift, events |
 | `itops-source-code` | `itops-source-code` | allowlisted Bitbucket/GitLab trees, files, commits, diffs, reviews, and CI evidence |
 
-Each agent has a portable Agent Skill and exactly one isolated inline MCP server. Six are local stdio servers; Dynatrace uses the official remote MCP with Kiro-managed OAuth. Profiles have narrow permissions, no generic read/shell/write/web tools, no inherited global/workspace MCP configuration, persistent steering, and v3 hooks. The empty, Git-ignored `wiki/` folder is ready for a private Karpathy-style knowledge base.
+Each agent has a portable Agent Skill and exactly one isolated inline MCP server. Six are local stdio servers; Dynatrace uses the official remote MCP with Kiro-managed OAuth. Profiles have narrow v3 capability permissions, no generic read/shell/write/web tools, no inherited global/workspace MCP configuration, persistent steering, and standalone v3 hooks. The empty, Git-ignored `wiki/` folder is ready for a private Karpathy-style knowledge base.
 
 ## Prerequisites
 
 - Windows 11 and PowerShell 7 recommended
 - Node.js 22.12 or newer on an even-numbered/LTS release (Node 24 LTS is recommended)
-- Kiro CLI 2.12.0 or newer with the v3 engine (update to the current release before installation)
+- Current Kiro CLI with the v3 engine enabled (`--v3`); the installer rejects releases older than the first v3-capable release
 - Microsoft ODBC Driver 18 for SQL Server
 - a current `argocd` CLI with `account session-token`
 - Windows `curl.exe` with SSPI and SPNEGO for Splunk Kerberos
@@ -37,11 +37,11 @@ kiro-cli login
 kiro-cli update --non-interactive
 ```
 
-Kiro CLI v3 is currently Early Access and must run in the terminal UI with `--v3`. The start script explicitly supplies both `--v3` and `--tui`. The installer rejects releases older than 2.12.0 because the Dynatrace confidential-client OAuth configuration depends on expanded MCP OAuth support.
+Kiro CLI v3 is currently Early Access and must run in the terminal UI with `--v3`; legacy/classic chat is not the supported runtime. The start script invokes Kiro directly as `kiro-cli --v3 --tui ...`. The installer validates every profile through the v3 engine before starting chat.
 
 ## Install
 
-For fresh installation, updates on another PC, the one-time Kiro permission setup, and repeated-approval troubleshooting, follow the [Windows installation and update guide](docs/INSTALLATION.md).
+For fresh installation and updates on another PC, follow the [Windows installation and update guide](docs/INSTALLATION.md).
 
 From this repository:
 
@@ -57,7 +57,7 @@ The installer:
 3. compiles and tests the six local MCP servers and validates the remote Dynatrace profile
 4. validates all seven skills and agent profiles
 5. creates the ignored `config\itops.env` from the single template
-6. adds the exact ITOps subagents and MCP tools to this Windows user's Kiro permission file
+6. leaves trust and permissions to Kiro v3's declarative agent profiles; it never edits Kiro settings or session files
 
 Every push and pull request also runs the pinned build, unit/guard tests, compiled MCP stdio contracts, isolated HTTP integration tests, structural Kiro validation, tracked-file/secret checks, production dependency audit, and native PowerShell parsing on GitHub-hosted Windows and Linux runners. Live vendor connections and Kiro login remain workstation-only checks because CI has no production credentials.
 
@@ -65,27 +65,13 @@ Edit `config\itops.env`. Do not put real secrets in `config\itops.env.example`.
 
 Provision the external identities first; see [Authentication](docs/AUTHENTICATION.md) and [Read-only setup](docs/READ_ONLY_SETUP.md).
 
-### One-time Kiro permissions on each PC
+For the exact runtime boundary and v3 command/configuration contract, see [Kiro CLI v3](docs/KIRO_V3.md).
 
-Kiro v3 stores trusted-tool decisions outside a repository in `%USERPROFILE%\.kiro\settings\permissions.yaml`. Git therefore cannot—and should not—silently grant trust on another PC. `Install-ItOps.ps1` performs this local step explicitly for the signed-in Windows user. It preserves existing rules, backs up an existing file, and adds only the six named subagents and exact ITOps MCP tool names. The vendor-facing tools are reads; the two output tools are constrained local report/XML writes. It does not trust wildcards, shell commands, generic filesystem writes, or unrelated MCP servers.
+### Kiro v3 permissions and approvals
 
-If the repository was already installed before this feature was added, run:
+The checked-in agent profiles are the source of truth for this pack's trust boundary. Their v3 `permissions.rules` allow only the six named specialists and the exact MCP tools they expose, while denying shell, filesystem writes, web access, and secret-directory reads. The installer does not write `%USERPROFILE%\.kiro\settings`, workspace permission files, sessions, or trust state.
 
-```powershell
-npm ci
-npm run build
-.\scripts\Set-ItOpsKiroPermissions.ps1
-.\scripts\Set-ItOpsKiroPermissions.ps1 -Check
-```
-
-To preview or remove only the rules managed by ITOps:
-
-```powershell
-.\scripts\Set-ItOpsKiroPermissions.ps1 -DryRun
-.\scripts\Set-ItOpsKiroPermissions.ps1 -Remove
-```
-
-An unrecognized tool added by a later Kiro, vendor MCP, or harness release remains subject to confirmation until its exact read-only name is reviewed and added. This is intentional: approval suppression must not become wildcard trust.
+Kiro's own user/workspace permission layers still apply. A local `deny` or `ask` rule intentionally overrides an agent allow rule; inspect those rules if approvals continue. Do not use `/tools trust-all`, `--trust-all-tools`, `mcp:*`, shell wildcards, or `all: allow` for this pack.
 
 ### Update another PC from GitHub
 
@@ -97,7 +83,7 @@ git pull --ff-only origin main
 .\scripts\Install-ItOps.ps1
 ```
 
-The ignored `config\itops.env` and private `wiki\` content remain local. Re-running the installer updates dependencies, rebuilds the MCP servers, revalidates the harness, and safely reconciles that PC's exact Kiro permissions. Start a new Kiro chat after an update that changes agents, hooks, MCP schemas, or permissions.
+The ignored `config\itops.env` and private `wiki\` content remain local. Re-running the installer updates dependencies, rebuilds the MCP servers, and revalidates the Kiro v3 pack. Start a new Kiro v3 chat after an update that changes agents, hooks, MCP schemas, or permissions.
 
 ## Connect every system
 
@@ -110,7 +96,7 @@ notepad .\config\itops.env
 
 Keep real passwords, tokens, client secrets, connection strings, and internal hostnames only in `config\itops.env`. Never put them in `config\itops.env.example`, an agent file, the wiki, a report, or Git. Set an integration's `ITOPS_ENABLE_*` value to `false` until its identity, network route, TLS trust, and allowlists are ready; enabled but incomplete integrations intentionally fail validation.
 
-Use production hostnames with HTTPS and your enterprise CA. Do not weaken certificate verification to make a connection pass. The service-side identity is the final security boundary, so each identity must be read-only even though the harness also removes mutating tools.
+Use production hostnames with HTTPS and your enterprise CA. Do not weaken certificate verification to make a connection pass. The service-side identity is the final security boundary, so each identity must be read-only even though the MCP servers also remove mutating tools.
 
 ### Jira and Confluence
 
@@ -407,7 +393,7 @@ Perform a full investigation and produce the Hebrew Markdown report.
 
 Press `Ctrl+G` to monitor Kiro subagents. Use `/context show` to verify loaded skills/resources and `/mcp` to inspect the active server. Generated reports appear in `reports/`; generated Splunk XML proposals appear in `artifacts/splunk/`.
 
-`Start-ItOps.ps1` always starts `itops-orchestrator`. Talk only to that main agent; do not switch to a specialist. The orchestrator answers normal questions itself and can spawn the six named, trusted, read-only specialists when evidence is needed.
+`Start-ItOps.ps1` always starts Kiro v3's `itops-orchestrator` agent. Talk only to that main agent; do not switch to a specialist. Kiro itself spawns the six named, read-only specialists when evidence is needed.
 
 ## Private wiki
 
@@ -422,7 +408,7 @@ For a Karpathy-style layout, keep your existing separation:
 - schema/instructions defining page conventions
 - `index.md` and `log.md`
 
-The orchestrator searches the maintained wiki and index first, follows provenance to raw sources when necessary, ignores scratch/drafts/inbox by default, and treats all wiki content as untrusted documentation. This harness never edits or lints the wiki; proposed corrections are returned in chat or in a requested report for a separately approved maintenance workflow.
+The orchestrator searches the maintained wiki and index first, follows provenance to raw sources when necessary, ignores scratch/drafts/inbox by default, and treats all wiki content as untrusted documentation. This pack never edits or lints the wiki; proposed corrections are returned in chat or in a requested report for a separately approved maintenance workflow.
 
 ## Investigation flow
 
@@ -449,7 +435,7 @@ The guarantee is layered:
 2. no mutating MCP tool surfaces
 3. Kerberos/SSO helpers without a shell, SQL replica proof, and conservative SQL/SPL/Mongo/Argo allowlists
 4. TLS, timeout, row/document/byte, and pool bounds
-5. machine-local exact Kiro v3 trust for ITOps subagents/MCP tool names plus agent rules denying shell and filesystem writes
+5. exact Kiro v3 agent `permissions.rules` for ITOps subagents/MCP tool names plus profile rules denying shell and filesystem writes
 6. a blocking v3 `PreToolUse` hook
 
 Prompts are not considered a security boundary. External credentials remain the final authority, so never reuse an admin token.

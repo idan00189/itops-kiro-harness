@@ -9,9 +9,9 @@ Run:
 .\scripts\Start-ItOps.ps1
 ```
 
-The authentication initializer reuses or opens Argo CD Microsoft SSO. Dynatrace OAuth opens in the browser when Kiro first starts that specialist. `Start-ItOps.ps1` runs the initializer automatically and always opens `itops-orchestrator`. Keep the conversation there. Do not run or switch to a specialist; the orchestrator selects and coordinates them internally.
+The authentication initializer reuses or opens Argo CD Microsoft SSO. Dynatrace OAuth opens in the browser when Kiro first starts that specialist. `Start-ItOps.ps1` runs the initializer automatically and always opens Kiro v3's `itops-orchestrator`. Keep the conversation there. Do not run or switch to a specialist; Kiro selects and coordinates them internally.
 
-`Start-ItOps.ps1` first checks the current Windows user's exact Kiro permission allowlist. If it is missing or stale, the script stops before chat and tells you to run `.\scripts\Set-ItOpsKiroPermissions.ps1`. The installer normally performs this once per PC.
+`Start-ItOps.ps1` validates the checked-in Kiro v3 profiles and MCP startup before chat. It does not edit or check machine-wide trust files.
 
 The default interaction is an ordinary operational question. Examples:
 
@@ -125,25 +125,24 @@ Run `Test-ItOps.ps1` again. Disabled systems are skipped in health checks and re
 Run:
 
 ```powershell
-.\scripts\Set-ItOpsKiroPermissions.ps1
 .\scripts\Test-ItOps.ps1
 ```
 
 Also re-run:
 
 ```powershell
-kiro-cli agent validate --path .\.kiro\agents\itops-orchestrator.md
-kiro-cli chat --v3 --tui --agent itops-orchestrator --require-mcp-startup
+kiro-cli --v3 agent validate --path .\.kiro\agents\itops-orchestrator.md
+kiro-cli --v3 --tui --agent itops-orchestrator --require-mcp-startup
 ```
 
 Kiro hot-reloads agent/MCP profile edits, but dependency or compiled server changes require `npm run build` and a session restart.
 
-Kiro keeps permissions in `%USERPROFILE%\.kiro\settings\permissions.yaml`, outside Git. Run the permission configurator after pulling a harness release that adds or renames tools. It preserves user rules and writes a timestamped backup before changing an existing file. `-Check`, `-DryRun`, and `-Remove` provide non-mutating validation, preview, and removal of only ITOps-managed rules.
+Kiro keeps user/workspace permission files outside Git. The checked-in v3 agent profiles declare the ITOps allow/deny rules; a user or workspace `deny`/`ask` rule can still override them. Review restrictive rules deliberately instead of adding wildcard trust.
 
 ## Troubleshooting
 
 - MCP startup failure: run `npm run build`, then `npm run health`.
-- Repeated subagent/tool approval: close the current chat, run `.\scripts\Set-ItOpsKiroPermissions.ps1 -Check`; if it reports missing entries, run the command without `-Check` and start a fresh chat. Do not solve this with `mcp:*`, shell, or filesystem wildcards.
+- Repeated subagent/tool approval: close the current chat and start a fresh `kiro-cli --v3 --tui` session. Inspect restrictive user/workspace permission rules if the exact profile rule is still overridden. Do not solve this with `mcp:*`, shell, or filesystem wildcards.
 - `maximum allowed nesting depth` while calling Splunk: pull the current `main`, rerun `Install-ItOps.ps1`, and start a fresh chat. Version 1.3.1 exposes dashboard panels through the flat `panelsJson` argument so the entire Splunk MCP tool set stays inside provider schema-depth limits.
 - Splunk Kerberos failure: verify `curl.exe --version` lists SSPI/SPNEGO, the Windows ticket/SPN is valid, and the HTTPS endpoint returns `WWW-Authenticate: Negotiate`.
 - Splunk port failure: set `SPLUNK_BASE_URL=https://host` and `SPLUNK_PORT=1..65535`; if the URL already embeds a port, leave `SPLUNK_PORT` empty or make both values identical.
@@ -156,8 +155,8 @@ Kiro keeps permissions in `%USERPROFILE%\.kiro\settings\permissions.yaml`, outsi
 - TLS failure: install/set the correct CA; never disable verification.
 - HTTP 401/403: verify the read-only token and resource permission.
 - Empty evidence: check connection/profile selection, database, window, timezone, retention, sampling, database/collection/project/repository allowlist, revision mapping, and replica lag.
-- Subagent fails immediately: run the machine-local permission check, inspect `/mcp`, and verify that specialist's server startup.
+- Subagent fails immediately: inspect `/mcp`, run Kiro v3 diagnostics, and verify that specialist's server startup.
 - Wiki result is missing: confirm the files are under `wiki\`, restart the Kiro session to refresh the auto-updated index, and inspect `/context show`.
 - Wiki result is stale or contradictory: preserve the conflict in the report and verify against immutable source/runtime evidence; do not silently edit the wiki.
-- Kiro environment issue: run `kiro-cli doctor --all` for installation/configuration checks or `kiro-cli diagnostic --force` for a standalone diagnostic report.
+- Kiro environment issue: run `kiro-cli diagnostic --force --format json` for a v3 diagnostic report.
 - Windows logs: Kiro writes under `%TEMP%\kiro-log\logs\kiro-chat.log`.
