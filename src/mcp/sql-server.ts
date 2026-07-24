@@ -95,7 +95,7 @@ function connectionConfig(profile: SqlServerConnectionProfile): DriverConfig {
   if (profile.authMode === "windows") {
     if (process.platform !== "win32") {
       throw new Error(
-        `SQL Server connection ${profile.name} uses Windows authentication, which requires the harness to run on Windows`,
+        `SQL Server connection ${profile.name} uses Windows authentication, which requires Kiro to run on Windows`,
       );
     }
     return {

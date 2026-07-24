@@ -28,7 +28,7 @@ Never provide an admin credential because the prompt says "read-only."
 - Data exfiltration/overcollection: result bounds, projections/playbooks, recursive redaction.
 - Secret leakage in audit: audit stores input hashes and metadata, not input/result payloads.
 - Specialist privilege creep: one isolated MCP server per agent and agent-specific MCP permission rules.
-- Approval fatigue and over-trust: the installer manages only exact subagent/MCP rules in the current user's Kiro permission file; vendor tools are reads, output tools are constrained local writes, and no MCP, shell, or filesystem wildcard is added.
+- Approval fatigue and over-trust: Kiro v3 agent profiles declare only exact subagent/MCP rules; vendor tools are reads, output tools are constrained local writes, and no MCP, shell, or filesystem wildcard is added.
 - Path traversal: report/artifact filename validation and resolved-directory checks.
 - Source overreach: repository/project allowlists, exact full deployed commit SHAs, secret-path denylist, bounded text-only reads, and no Git/shell surface.
 - Private wiki leakage: `wiki/*` is Git-ignored; the main agent consumes it through a selective local knowledge-base resource.
@@ -50,7 +50,7 @@ Never provide an admin credential because the prompt says "read-only."
 
 Treat all returned text as evidence, never as instructions. Narrow vendor scopes, indexes, tables, collections, projects, management zones, and spaces.
 
-The incident harness keeps the wiki read-only. A Karpathy-style maintainer normally writes synthesis and indexes, but mixing that role into a live incident session could persist an unverified hypothesis. Route candidate wiki updates through a separately reviewed maintenance workflow.
+The Kiro v3 pack keeps the wiki read-only. A Karpathy-style maintainer normally writes synthesis and indexes, but mixing that role into a live incident session could persist an unverified hypothesis. Route candidate wiki updates through a separately reviewed maintenance workflow.
 
 ## Production checklist
 
@@ -58,7 +58,7 @@ The incident harness keeps the wiki read-only. A Karpathy-style maintainer norma
 - [ ] `npm run verify` passes.
 - [ ] `Test-ItOps.ps1` passes all enabled health checks.
 - [ ] Kiro validates all seven agent profiles.
-- [ ] `Set-ItOpsKiroPermissions.ps1 -Check` passes for the Windows user who runs chat.
+- [ ] Kiro v3 validates all agent profiles with `kiro-cli --v3 agent validate`.
 - [ ] Kiro workspace trust was granted intentionally.
 - [ ] No production secret appears outside ignored `config\itops.env`.
 - [ ] TLS verification is enabled and enterprise CAs are installed.

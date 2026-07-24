@@ -1,10 +1,12 @@
-# Architecture and Kiro v3 feature use
+# Architecture: Kiro CLI v3 plus MCP
+
+Kiro CLI v3 is the harness and owns the conversation loop, planning, subagent scheduling, permissions, skill activation, context, and TUI. This repository is only a portable Kiro workspace pack plus MCP implementations. No custom process replaces Kiro's agent runtime.
 
 ## Agent isolation
 
-The harness uses workspace Markdown profiles in `.kiro/agents/`. Every profile embeds exactly one MCP server. Six use local stdio MCP processes; the Dynatrace specialist uses the official remote Dynatrace MCP through Kiro OAuth. There is no workspace-global `mcp.json`, so a specialist cannot inherit unrelated database or operations tools.
+The pack uses workspace Markdown profiles in `.kiro/agents/`. Every profile embeds exactly one MCP server. Six use local stdio MCP processes; the Dynatrace specialist uses the official remote Dynatrace MCP through Kiro OAuth. There is no workspace-global `mcp.json`, so a specialist cannot inherit unrelated database or operations tools.
 
-The orchestrator is the only user-facing agent and the only profile with `subagent`. It answers ordinary questions directly and uses specialists only when evidence is needed. Kiro `availableAgents`/`trustedAgents`, agent capability rules, and a machine-local exact permission allowlist restrict delegation to the six named read-only specialists. Specialists cannot spawn agents and return their summaries to the orchestrator. The installer reconciles the local allowlist because Kiro intentionally keeps trust decisions outside a cloned repository.
+The orchestrator is the only user-facing agent and the only profile with `subagent`. It answers ordinary questions directly and uses specialists only when evidence is needed. Kiro v3 `permissions.rules` restrict delegation to the six named read-only specialists and restrict each specialist to its own exact MCP tools. Specialists cannot spawn agents and return their summaries to the orchestrator. The installer never edits Kiro's settings or trust state.
 
 ```mermaid
 sequenceDiagram
@@ -45,10 +47,10 @@ sequenceDiagram
 | tool-category tags | `knowledge`, `todo_list`, orchestrator-only `subagent`, and `@mcp` |
 | inline MCP servers | six portable agent-specific stdio processes plus official remote Dynatrace MCP |
 | remote MCP OAuth | Dynatrace confidential client, browser PKCE/Microsoft SSO, token refresh in Kiro |
-| capability permissions | exact machine-local subagent/MCP trust plus isolated agent rules denying shell/fs_write/web |
+| capability permissions | exact inline v3 subagent/MCP rules plus isolated agent rules denying shell/fs_write/web |
 | standalone v1 hooks | deterministic v3 `SessionStart` policy, pre-tool blocker, post-tool audit, manual report QA |
 | custom subagents | isolated observability, data, deployment, and source investigations |
-| subagent allow/trust lists | only the six custom ITOps specialists can run; no default general-purpose subagent |
+| subagent permissions | only the six named ITOps specialists can run; no default general-purpose subagent |
 | Agent Skills | progressive domain playbooks and references |
 | steering + AGENTS.md | persistent safety, product, structure, and reporting policy |
 | knowledge | local wiki and Markdown workspace context |
@@ -58,13 +60,13 @@ sequenceDiagram
 | hot reload | Kiro picks up agent/MCP profile edits at idle boundaries |
 | Windows CI | PowerShell-native parsing plus full build/test/config validation on `windows-latest` |
 
-Kiro Tool Search is optional. The installer can enable it, but the agent-specific tool surfaces are already small. No model is pinned so the harness can use the model your Kiro organization permits.
+Kiro Tool Search is optional. The agent-specific tool surfaces are already small, so no extra settings mutation is required. No model is pinned so Kiro can use the model your organization permits.
 
 ## Wiki trust and scale
 
 The main profile registers `wiki/` as `ITOpsWiki` instead of expanding `wiki/**/*.md` as eager resources. Kiro knowledge-base resources support large indexed content with incremental loading, avoiding full-wiki context injection.
 
-The orchestrator follows Karpathy-style separation between immutable sources, maintained synthesis, and schema. It uses the maintained index first and cites wiki provenance as `WIKI-NNN`. Wiki text can guide navigation but cannot override ITOps policy or establish current production state. The incident harness has no wiki write capability.
+The orchestrator follows Karpathy-style separation between immutable sources, maintained synthesis, and schema. It uses the maintained index first and cites wiki provenance as `WIKI-NNN`. Wiki text can guide navigation but cannot override ITOps policy or establish current production state. The pack has no wiki write capability.
 
 ## Response routing
 
@@ -97,6 +99,6 @@ Shared controls:
 
 ## Why custom MCP servers
 
-The harness does not expose generic database, HTTP, Git, kubectl, CLI, or shell tools to agents. A generic executor would make the read-only claim depend on prompt compliance. Custom MCP servers expose small vendor-specific operations and reject unsafe query forms before network execution. The two internal CLI helpers are fixed authentication adapters: Splunk can call only `curl.exe` with a fixed Negotiate request shape, and Argo CD can call only `account session-token`.
+The pack does not expose generic database, HTTP, Git, kubectl, CLI, or shell tools to agents. A generic executor would make the read-only claim depend on prompt compliance. Custom MCP servers expose small vendor-specific operations and reject unsafe query forms before network execution. The two internal CLI helpers are fixed authentication adapters: Splunk can call only `curl.exe` with a fixed Negotiate request shape, and Argo CD can call only `account session-token`.
 
 The HTTP `POST` used by Splunk search export and the official Dynatrace Data Analysis tool starts query work but does not persist configuration or production data. Credentials and OAuth clients must still lack write scopes.

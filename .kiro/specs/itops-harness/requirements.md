@@ -29,8 +29,8 @@ THE SYSTEM SHALL require an allowlisted repository/project and exact deployed re
 WHEN a specialist is spawned  
 THE SYSTEM SHALL expose only that specialist's read-only MCP server and workspace reading capabilities.
 
-WHEN the harness is installed or updated on a Windows PC
-THE SYSTEM SHALL reconcile Kiro's machine-local permission file with exact ITOps subagent and MCP tool names while preserving and backing up unrelated user rules; external tools SHALL remain reads, output tools SHALL remain constrained local report/XML writes, and the installer SHALL NOT add wildcard, shell, or generic filesystem-write trust.
+WHEN the pack is installed or updated on a Windows PC
+THE SYSTEM SHALL validate the checked-in Kiro v3 agent permission rules for exact ITOps subagent and MCP tool names; external tools SHALL remain reads, output tools SHALL remain constrained local report/XML writes, and the installer SHALL NOT modify Kiro settings, sessions, or trust files.
 
 WHEN Splunk Kerberos, SQL Server Windows authentication, or Argo CD CLI SSO is selected
 THE SYSTEM SHALL reuse the current Windows identity or vendor-supported cached SSO session without storing a Microsoft or Windows password.

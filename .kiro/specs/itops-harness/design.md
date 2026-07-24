@@ -23,7 +23,7 @@ flowchart TD
 
 Each agent declares exactly one isolated MCP server. Six are local stdio processes; Dynatrace is the official remote HTTP MCP with Kiro-managed OAuth. Workspace-global MCP inheritance remains disabled, so a specialist cannot receive unrelated tools.
 
-The launcher pins the orchestrator as the user-facing agent. Kiro subagent `availableAgents` and `trustedAgents` contain exactly the six specialist profiles, which report summaries back to the orchestrator.
+The launcher pins the orchestrator as the user-facing agent. The orchestrator's Kiro v3 `permissions.rules` contain exactly the six specialist profiles, which report summaries back to the orchestrator.
 
 The orchestrator routes routine questions and targeted checks to direct chat responses. It invokes the full investigation skill and report writer only for explicit report or comprehensive investigation/RCA/postmortem intent. Tool usage alone never changes the output mode.
 
@@ -36,7 +36,7 @@ The private `wiki/` tree is an auto-updated `best` knowledge-base resource on th
 3. Connection proof: every named SQL profile requests read intent and verifies its exact database is a read-only AG secondary before its isolated pool and inside each batch.
 4. Input guards: explicit database connection selectors, Mongo system-database denial and per-profile database/collection allowlists, SQL/SPL query allowlists, remote Dynatrace read scopes, Argo project/app allowlists, source repository/project allowlists, exact deployed full commit SHAs, and secret-path denials.
 5. Runtime bounds: timeouts, rows/documents/bytes, pool limits, TLS verification.
-6. Kiro policy: tool tags, exact machine-local subagent/MCP trust, isolated agent permission rules, and denied shell/fs_write/web.
+6. Kiro policy: v3 tool tags, exact inline subagent/MCP permission rules, and denied shell/fs_write/web.
 7. Hook policy: deterministic v3 `SessionStart` context, v3 `PreToolUse` blocking, and metadata-only `PostToolUse` audit.
 8. Knowledge policy: indexed selective retrieval, provenance IDs, prompt-injection handling, and no incident-time wiki writes.
 
